@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HEMIDI - Mini Order Management System</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <div class="brand-badge">HEMIDI</div>
+        <div class="brand-title">
+          <h1>Mini Order Management</h1>
+          <span class="subtext">Fresher NodeJS Developer · NestJS + TypeORM + BullMQ + Redis</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <a href="/api/docs" target="_blank" class="nav-link docs-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          Swagger Docs (/api/docs)
+        </a>
+        <button id="btn-refresh" class="btn btn-outline" title="Làm mới dữ liệu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Làm mới
+        </button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="tab-products">
+        <span class="tab-icon">📦</span> Sản Phẩm & Tồn Kho
+      </button>
+      <button class="tab-btn" data-tab="tab-order-create">
+        <span class="tab-icon">🛒</span> Đặt Đơn Hàng Mới
+      </button>
+      <button class="tab-btn highlight-tab" data-tab="tab-concurrency">
+        <span class="tab-icon">⚡</span> Test Đua Tồn Kho (Concurrency)
+      </button>
+      <button class="tab-btn" data-tab="tab-orders">
+        <span class="tab-icon">📑</span> Quản Lý Đơn & BullMQ Jobs
+        <span id="pending-count-badge" class="badge-counter" style="display:none;">0</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-logs">
+        <span class="tab-icon">🔔</span> Nhật Ký Thông Báo
+      </button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Alerts Banner -->
+      <div id="toast-container" class="toast-container"></div>
+
+      <!-- TAB 1: PRODUCTS -->
+      <section id="tab-products" class="tab-pane active">
+        <div class="pane-header">
+          <div>
+            <h2>Danh Sách Sản Phẩm & Tồn Kho</h2>
+            <p class="description">Hỗ trợ tìm kiếm theo tên, lọc khoảng giá, quản lý tồn kho và xóa mềm (Soft Delete).</p>
+          </div>
+          <button id="btn-open-create-product" class="btn btn-primary">
+            + Thêm Sản Phẩm Mới
+          </button>
+        </div>
+
+        <div class="filter-card">
+          <div class="filter-inputs">
+            <input type="text" id="search-product" placeholder="🔍 Tìm kiếm theo tên sản phẩm..." class="form-input">
+            <input type="number" id="filter-min-price" placeholder="Giá tối thiểu (VND)" class="form-input">
+            <input type="number" id="filter-max-price" placeholder="Giá tối đa (VND)" class="form-input">
+            <button id="btn-filter-products" class="btn btn-secondary">Lọc Dữ Liệu</button>
+            <button id="btn-reset-filter-products" class="btn btn-outline">Đặt lại</button>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Tên Sản Phẩm</th>
+                <th>Đơn Giá</th>
+                <th>Tồn Kho</th>
+                <th>Ngày Tạo</th>
+                <th>Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="products-table-body">
+              <tr><td colspan="6" class="text-center">Đang tải danh sách sản phẩm...</td></tr>
+            </tbody>
+          </table>
+          <div class="pagination-footer" id="products-pagination"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: CREATE ORDER -->
+      <section id="tab-order-create" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Đặt Hàng Trực Tiếp (Create Order)</h2>
+            <p class="description">Mỗi đơn hàng được kiểm tra tồn kho bằng Pessimistic Lock và tạo job xử lý nền 3-5s với BullMQ.</p>
+          </div>
+        </div>
+
+        <div class="grid-2-col">
+          <div class="form-card">
+            <h3>Thông Tin Khách Hàng & Giỏ Hàng</h3>
+            <form id="order-form">
+              <div class="form-group">
+                <label>Tên Khách Hàng <span class="required">*</span></label>
+                <input type="text" id="order-customer-name" class="form-input" required value="Lê Vĩnh Quang">
+              </div>
+
+              <div class="form-group">
+                <label>Email Nhận Thông Báo <span class="required">*</span></label>
+                <input type="email" id="order-customer-email" class="form-input" required value="vinhquang@example.com">
+              </div>
+
+              <div class="form-group">
+                <label>Chọn Sản Phẩm <span class="required">*</span></label>
+                <select id="order-product-select" class="form-input" required>
+                  <option value="">-- Đang tải sản phẩm --</option>
+                </select>
+                <div id="selected-product-info" class="hint-text mt-1"></div>
+              </div>
+
+              <div class="form-group">
+                <label>Số Lượng Mua <span class="required">*</span></label>
+                <input type="number" id="order-quantity" class="form-input" min="1" value="1" required>
+              </div>
+
+              <button type="submit" id="btn-submit-order" class="btn btn-primary btn-block">
+                🛒 Xác Nhận Đặt Hàng (POST /orders)
+              </button>
+            </form>
+          </div>
+
+          <div class="info-card">
+            <h3>Luồng Xử Lý Backend Theo Yêu Cầu Đề Bài</h3>
+            <div class="flow-steps">
+              <div class="step-item">
+                <span class="step-num">1</span>
+                <div>
+                  <strong>Transaction & Pessimistic Lock</strong>
+                  <p>Khóa dòng sản phẩm với <code>SELECT ... FOR UPDATE</code>. Trừ kho tức thời và lưu unitPrice lịch sử vào <code>order_items</code>.</p>
+                </div>
+              </div>
+              <div class="step-item">
+                <span class="step-num">2</span>
+                <div>
+                  <strong>Khởi Tạo Đơn & Job BullMQ</strong>
+                  <p>Tạo đơn trạng thái <code>PENDING</code>. Đẩy job vào queue <code>order-processing</code> với cấu hình retry tối đa 3 lần, backoff exponential.</p>
+                </div>
+              </div>
+              <div class="step-item">
+                <span class="step-num">3</span>
+                <div>
+                  <strong>Worker Xử Lý Nền (3-5s)</strong>
+                  <p>Giả lập xử lý 3-5 giây. Xác suất lỗi ~30%. Khi thành công chuyển <code>CONFIRMED</code> và ghi <code>notification_logs</code>. Nếu hết 3 lần thử thất bại → chuyển <code>FAILED</code> và tự động hoàn trả tồn kho!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: CONCURRENCY TEST -->
+      <section id="tab-concurrency" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>⚡ Test Đua Tồn Kho (Race Condition Simulator)</h2>
+            <p class="description">Mô phỏng trường hợp <strong>10 khách hàng cùng lúc đặt mua 1 sản phẩm chỉ còn đúng 1 tồn kho</strong> tại cùng một mili-giây.</p>
+          </div>
+        </div>
+
+        <div class="concurrency-hero-card">
+          <div class="hero-left">
+            <span class="tag-accent">Bảo Vệ Tồn Kho Tuyệt Đối</span>
+            <h3>Kiểm Chứng Cơ Chế Chống Bán Vượt Tồn Kho</h3>
+            <p>Hệ thống sử dụng cơ chế <strong>Pessimistic Locking (SELECT ... FOR UPDATE)</strong> trong PostgreSQL. Dù 10 hoặc 100 requests đến đồng thời, chỉ <strong>đúng 1 đơn hàng duy nhất</strong> được tạo thành công (201 Created), các requests còn lại sẽ nhận phản hồi lỗi 400 Bad Request rõ ràng và tồn kho cuối cùng luôn là 0, không bao giờ bị âm!</p>
+            
+            <div class="concurrency-actions">
+              <button id="btn-run-race-test" class="btn btn-race">
+                🚀 Bắt Đầu Bắn 10 Request Đồng Thời (Run Concurrency Test)
+              </button>
+              <button id="btn-reset-test-item" class="btn btn-outline">
+                🔄 Đặt Lại Tồn Kho = 1
+              </button>
+            </div>
+          </div>
+
+          <div class="hero-right">
+            <div class="stat-box">
+              <span class="stat-label">Sản Phẩm Test:</span>
+              <span class="stat-value" id="race-product-name">Đang tải...</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Tồn Kho Hiện Tại:</span>
+              <span class="stat-value highlight-stock" id="race-product-stock">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Concurrency Live Results -->
+        <div id="concurrency-results-container" style="display:none;" class="results-container">
+          <div class="results-header">
+            <h3>Kết Quả 10 Requests Đồng Thời:</h3>
+            <div class="stats-pills">
+              <span class="pill pill-success">Thành công (201): <strong id="race-count-success">0</strong></span>
+              <span class="pill pill-danger">Từ chối (400): <strong id="race-count-failed">0</strong></span>
+              <span class="pill pill-info">Thời gian chạy: <strong id="race-time-elapsed">0ms</strong></span>
+            </div>
+          </div>
+          <div class="requests-grid" id="concurrency-requests-grid"></div>
+        </div>
+      </section>
+
+      <!-- TAB 4: ORDERS & BULLMQ JOBS -->
+      <section id="tab-orders" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Quản Lý Đơn Hàng & Giám Sát Job BullMQ</h2>
+            <p class="description">Theo dõi trạng thái đơn hàng theo thời gian thực (PENDING ➔ CONFIRMED hoặc FAILED). Xem chi tiết số lần retry của BullMQ và hủy đơn hoàn kho.</p>
+          </div>
+          <div class="auto-refresh-toggle">
+            <label class="switch">
+              <input type="checkbox" id="auto-refresh-orders" checked>
+              <span class="slider round"></span>
+            </label>
+            <span class="switch-label">Tự động làm mới (3s)</span>
+          </div>
+        </div>
+
+        <div class="filter-card">
+          <div class="filter-status-buttons" id="order-status-filters">
+            <button class="status-filter-btn active" data-status="">Tất Cả</button>
+            <button class="status-filter-btn" data-status="PENDING">PENDING (Đang Xử Lý)</button>
+            <button class="status-filter-btn" data-status="CONFIRMED">CONFIRMED (Thành Công)</button>
+            <button class="status-filter-btn" data-status="CANCELLED">CANCELLED (Đã Hủy)</button>
+            <button class="status-filter-btn" data-status="FAILED">FAILED (Thất Bại)</button>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mã Đơn</th>
+                <th>Khách Hàng</th>
+                <th>Sản Phẩm & SL</th>
+                <th>Tổng Tiền</th>
+                <th>Trạng Thái</th>
+                <th>Thời Gian</th>
+                <th>Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <tr><td colspan="7" class="text-center">Đang tải danh sách đơn hàng...</td></tr>
+            </tbody>
+          </table>
+          <div class="pagination-footer" id="orders-pagination"></div>
+        </div>
+      </section>
+
+      <!-- TAB 5: NOTIFICATION LOGS -->
+      <section id="tab-logs" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Nhật Ký Thông Báo (Notification Logs)</h2>
+            <p class="description">Ghi lại toàn bộ thông báo hệ thống được kích hoạt bởi worker BullMQ khi đơn hàng CONFIRMED, FAILED, hoặc CANCELLED.</p>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Thời Gian</th>
+                <th>Trạng Thái</th>
+                <th>Mã Đơn Hàng</th>
+                <th>Email Khách</th>
+                <th>Tiêu Đề</th>
+                <th>Nội Dung Chi Tiết</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body">
+              <tr><td colspan="6" class="text-center">Đang tải nhật ký thông báo...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Job Details -->
+    <div id="modal-job-details" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Chi Tiết Job BullMQ (`order-processing`)</h3>
+          <button class="btn-close-modal" data-close="modal-job-details">&times;</button>
+        </div>
+        <div class="modal-body" id="job-details-content">
+          Đang tải thông tin job...
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-close="modal-job-details">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Create Product -->
+    <div id="modal-create-product" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>+ Thêm Sản Phẩm Mới</h3>
+          <button class="btn-close-modal" data-close="modal-create-product">&times;</button>
+        </div>
+        <form id="create-product-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Mã SKU (Duy Nhất) <span class="required">*</span></label>
+              <input type="text" id="new-prod-sku" class="form-input" placeholder="VD: SONY-WH1000XM5" required>
+            </div>
+            <div class="form-group">
+              <label>Tên Sản Phẩm <span class="required">*</span></label>
+              <input type="text" id="new-prod-name" class="form-input" placeholder="VD: Tai nghe Sony WH-1000XM5" required>
+            </div>
+            <div class="form-group">
+              <label>Đơn Giá (VND) <span class="required">*</span></label>
+              <input type="number" id="new-prod-price" class="form-input" min="0" placeholder="VD: 7990000" required>
+            </div>
+            <div class="form-group">
+              <label>Số Lượng Tồn Kho <span class="required">*</span></label>
+              <input type="number" id="new-prod-stock" class="form-input" min="0" placeholder="VD: 20" required>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" data-close="modal-create-product">Hủy</button>
+            <button type="submit" class="btn btn-primary">Lưu Sản Phẩm</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
