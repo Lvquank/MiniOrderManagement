@@ -28,6 +28,16 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const isTls = config.get<string>('REDIS_TLS') === 'true';
+        const redisUrl = config.get<string>('REDIS_URL');
+        if (redisUrl) {
+          return {
+            connection: {
+              url: redisUrl,
+              maxRetriesPerRequest: null,
+              enableReadyCheck: false,
+            },
+          };
+        }
         return {
           connection: {
             host: config.get<string>('REDIS_HOST', '127.0.0.1'),
@@ -35,6 +45,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
             password: config.get<string>('REDIS_PASSWORD') || undefined,
             ...(isTls ? { tls: {} } : {}),
             maxRetriesPerRequest: null,
+            enableReadyCheck: false,
           },
         };
       },
