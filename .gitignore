@@ -37,3 +37,6 @@ Thumbs.db
 tools/
 dump.rdb
 
+# Docs
+docs/
+
