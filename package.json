@@ -22,6 +22,8 @@
     "test:concurrency": "ts-node -r tsconfig-paths/register scripts/test-concurrency.ts"
   },
   "dependencies": {
+    "@neon/config": "^1.9.1",
+    "@neon/env": "^1.6.2",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.11",
     "@nestjs/config": "^4.0.1",

@@ -7,18 +7,32 @@ import { NotificationLog } from '../modules/notifications/entities/notification-
 
 dotenv.config();
 
-export const dataSourceOptions: DataSourceOptions = {
-  type: 'postgres',
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  username: process.env.DB_USERNAME || 'postgres',
-  password: process.env.DB_PASSWORD || 'secret',
-  database: process.env.DB_DATABASE || 'mini_order_db',
-  entities: [Product, Order, OrderItem, NotificationLog],
-  migrations: [__dirname + '/migrations/*{.ts,.js}'],
-  synchronize: false,
-  logging: process.env.NODE_ENV === 'development',
-};
+const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+
+export const dataSourceOptions: DataSourceOptions = dbUrl
+  ? {
+      type: 'postgres',
+      url: dbUrl,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      entities: [Product, Order, OrderItem, NotificationLog],
+      migrations: [__dirname + '/migrations/*{.ts,.js}'],
+      synchronize: false,
+      logging: process.env.NODE_ENV === 'development',
+    }
+  : {
+      type: 'postgres',
+      host: process.env.DB_HOST || '127.0.0.1',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.DB_USERNAME || 'postgres',
+      password: process.env.DB_PASSWORD || 'secret',
+      database: process.env.DB_DATABASE || 'mini_order_db',
+      entities: [Product, Order, OrderItem, NotificationLog],
+      migrations: [__dirname + '/migrations/*{.ts,.js}'],
+      synchronize: false,
+      logging: process.env.NODE_ENV === 'development',
+    };
 
 const AppDataSource = new DataSource(dataSourceOptions);
 export default AppDataSource;
