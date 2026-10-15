@@ -339,25 +339,30 @@ async function updateProductStock(id, currentStock) {
   }
 }
 
-// ===================== TAB 2: ORDER FORM =====================
+// ===================== TAB 2: ORDER FORM & CART =====================
+let orderCart = [];
+let availableProducts = [];
+
 async function loadProductOptions() {
   try {
     const res = await fetch(`${API_BASE}/products?limit=100`);
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Không thể tải dữ liệu');
     const select = document.getElementById('order-product-select');
+    availableProducts = result.data || [];
 
-    select.replaceChildren(new Option('-- Chọn sản phẩm muốn mua --', ''));
-    (result.data || []).forEach((p) => {
-      const option = new Option(`${p.name} (${p.sku}) - Tồn kho: ${p.stock} - ${formatVND(p.price)}`, p.id);
+    select.replaceChildren(new Option('-- Chọn sản phẩm --', ''));
+    availableProducts.forEach((p) => {
+      const option = new Option(`${p.name} (${p.sku}) - Tồn: ${p.stock} - ${formatVND(p.price)}`, p.id);
       option.dataset.price = p.price;
       option.dataset.stock = p.stock;
+      option.dataset.name = p.name;
       select.add(option);
     });
 
     select.onchange = () => {
       const selected = select.options[select.selectedIndex];
-      if (selected.value) {
+      if (selected && selected.value) {
         document.getElementById('selected-product-info').textContent =
           `Đơn giá: ${formatVND(selected.dataset.price)} | Tồn kho khả dụng: ${selected.dataset.stock}`;
       } else {
@@ -369,15 +374,112 @@ async function loadProductOptions() {
   }
 }
 
-document.getElementById('order-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const customerName = document.getElementById('order-customer-name').value;
-  const customerEmail = document.getElementById('order-customer-email').value;
-  const productId = document.getElementById('order-product-select').value;
-  const quantity = parseInt(document.getElementById('order-quantity').value, 10);
+function renderCart() {
+  const tbody = document.getElementById('cart-items-body');
+  const countEl = document.getElementById('cart-item-count');
+  const totalEl = document.getElementById('cart-total-amount');
+
+  if (!tbody || !countEl || !totalEl) return;
+
+  countEl.textContent = orderCart.length;
+
+  if (orderCart.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 12px; color: #94a3b8;">Chưa có sản phẩm nào. Chọn sản phẩm ở trên rồi bấm "+ Thêm".</td></tr>';
+    totalEl.textContent = '0 ₫';
+    return;
+  }
+
+  let total = 0;
+  tbody.innerHTML = orderCart
+    .map((item, index) => {
+      const subtotal = item.price * item.quantity;
+      total += subtotal;
+      return `
+        <tr style="border-bottom: 1px solid var(--border-color);">
+          <td style="padding: 8px 4px;"><strong>${item.name}</strong></td>
+          <td style="padding: 8px 4px; text-align: center;">${item.quantity}</td>
+          <td style="padding: 8px 4px; text-align: right;">${formatVND(item.price)}</td>
+          <td style="padding: 8px 4px; text-align: right; font-weight: 600;">${formatVND(subtotal)}</td>
+          <td style="padding: 8px 4px; text-align: center;">
+            <button type="button" onclick="removeFromCart(${index})" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1rem; font-weight: bold;" title="Xóa món này">✕</button>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  totalEl.textContent = formatVND(total);
+}
+
+function removeFromCart(index) {
+  orderCart.splice(index, 1);
+  renderCart();
+}
+window.removeFromCart = removeFromCart;
+
+// Add to cart button
+document.getElementById('btn-add-to-cart')?.addEventListener('click', () => {
+  const select = document.getElementById('order-product-select');
+  const quantityInput = document.getElementById('order-quantity');
+  const productId = select.value;
+  const quantity = parseInt(quantityInput.value, 10);
 
   if (!productId) {
     showToast('Vui lòng chọn sản phẩm!', 'error');
+    return;
+  }
+
+  if (isNaN(quantity) || quantity <= 0) {
+    showToast('Số lượng mua phải lớn hơn 0!', 'error');
+    return;
+  }
+
+  const selectedOpt = select.options[select.selectedIndex];
+  const stock = parseInt(selectedOpt.dataset.stock, 10);
+  const price = parseFloat(selectedOpt.dataset.price);
+  const name = selectedOpt.dataset.name;
+
+  if (stock <= 0) {
+    showToast(`Sản phẩm "${name}" đã hết hàng!`, 'error');
+    return;
+  }
+
+  const existing = orderCart.find((i) => i.productId === productId);
+  const currentInCart = existing ? existing.quantity : 0;
+
+  if (currentInCart + quantity > stock) {
+    showToast(`Tồn kho chỉ còn ${stock} (bạn đã chọn ${currentInCart} trong đơn)!`, 'error');
+    return;
+  }
+
+  if (existing) {
+    existing.quantity += quantity;
+  } else {
+    orderCart.push({ productId, name, price, stock, quantity });
+  }
+
+  renderCart();
+  quantityInput.value = 1;
+  showToast(`Đã thêm ${quantity} x "${name}" vào đơn!`, 'success');
+});
+
+// Submit order
+document.getElementById('btn-submit-order')?.addEventListener('click', async () => {
+  const customerName = document.getElementById('order-customer-name').value.trim();
+  const customerEmail = document.getElementById('order-customer-email').value.trim();
+
+  if (!customerName) {
+    showToast('Vui lòng nhập tên khách hàng!', 'error');
+    return;
+  }
+
+  if (!customerEmail) {
+    showToast('Vui lòng nhập email khách hàng!', 'error');
+    return;
+  }
+
+  if (orderCart.length === 0) {
+    showToast('Vui lòng thêm ít nhất 1 sản phẩm vào đơn hàng!', 'error');
     return;
   }
 
@@ -392,13 +494,15 @@ document.getElementById('order-form').addEventListener('submit', async (e) => {
       body: JSON.stringify({
         customerName,
         customerEmail,
-        items: [{ productId, quantity }],
+        items: orderCart.map((i) => ({ productId: i.productId, quantity: i.quantity })),
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Lỗi khi tạo đơn hàng');
 
-    showToast(`Tạo đơn hàng #${data.id.substring(0, 8)} thành công! Đơn hàng đang được tự động xử lý.`, 'success');
+    showToast(`Tạo đơn hàng #${data.id.substring(0, 8)} thành công (${orderCart.length} loại sản phẩm)!`, 'success');
+    orderCart = [];
+    renderCart();
     loadProductOptions();
 
     // Switch to orders tab

@@ -125,34 +125,62 @@
         <div class="grid-2-col">
           <div class="form-card">
             <h3>Thông Tin Khách Hàng & Giỏ Hàng</h3>
-            <form id="order-form">
-              <div class="form-group">
-                <label>Tên Khách Hàng <span class="required">*</span></label>
-                <input type="text" id="order-customer-name" class="form-input" required value="Lê Vĩnh Quang">
-              </div>
+            <div class="form-group">
+              <label>Tên Khách Hàng <span class="required">*</span></label>
+              <input type="text" id="order-customer-name" class="form-input" required value="Lê Vĩnh Quang">
+            </div>
 
-              <div class="form-group">
-                <label>Email Nhận Thông Báo <span class="required">*</span></label>
-                <input type="email" id="order-customer-email" class="form-input" required value="vinhquang@example.com">
-              </div>
+            <div class="form-group">
+              <label>Email Nhận Thông Báo <span class="required">*</span></label>
+              <input type="email" id="order-customer-email" class="form-input" required value="vinhquang@example.com">
+            </div>
 
-              <div class="form-group">
-                <label>Chọn Sản Phẩm <span class="required">*</span></label>
-                <select id="order-product-select" class="form-input" required>
-                  <option value="">-- Đang tải sản phẩm --</option>
+            <hr style="margin: 18px 0; border: none; border-top: 1px dashed var(--border-color);">
+
+            <h4 style="margin-bottom: 10px; font-size: 0.95rem; color: #334155;">Thêm Sản Phẩm Vào Đơn</h4>
+            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; flex-wrap: wrap;">
+              <div style="flex: 3; min-width: 180px;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 4px; display: block;">Chọn Sản Phẩm</label>
+                <select id="order-product-select" class="form-input">
+                  <option value="">-- Chọn sản phẩm --</option>
                 </select>
-                <div id="selected-product-info" class="hint-text mt-1"></div>
               </div>
-
-              <div class="form-group">
-                <label>Số Lượng Mua <span class="required">*</span></label>
-                <input type="number" id="order-quantity" class="form-input" min="1" value="1" required>
+              <div style="flex: 1; min-width: 80px;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 4px; display: block;">Số Lượng</label>
+                <input type="number" id="order-quantity" class="form-input" min="1" value="1">
               </div>
-
-              <button type="submit" id="btn-submit-order" class="btn btn-primary btn-block">
-                🛒 Xác Nhận Đặt Hàng
+              <button type="button" id="btn-add-to-cart" class="btn btn-secondary" style="height: 42px; white-space: nowrap;">
+                + Thêm
               </button>
-            </form>
+            </div>
+            <div id="selected-product-info" class="hint-text" style="margin-top: -6px; margin-bottom: 14px;"></div>
+
+            <!-- Mini Cart Table -->
+            <div class="cart-box" style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
+              <div style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px;">Danh sách sản phẩm (<span id="cart-item-count">0</span>):</div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--border-color); text-align: left; color: #64748b;">
+                    <th style="padding: 6px 4px;">Sản phẩm</th>
+                    <th style="padding: 6px 4px; text-align: center;">SL</th>
+                    <th style="padding: 6px 4px; text-align: right;">Đơn giá</th>
+                    <th style="padding: 6px 4px; text-align: right;">Thành tiền</th>
+                    <th style="padding: 6px 4px; text-align: center; width: 30px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="cart-items-body">
+                  <tr><td colspan="5" style="text-align: center; padding: 12px; color: #94a3b8;">Chưa có sản phẩm nào. Chọn sản phẩm ở trên rồi bấm "+ Thêm".</td></tr>
+                </tbody>
+              </table>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); font-weight: 700;">
+                <span>Tổng Tiền Đơn Hàng:</span>
+                <span id="cart-total-amount" style="color: var(--primary); font-size: 1.1rem;">0 ₫</span>
+              </div>
+            </div>
+
+            <button type="button" id="btn-submit-order" class="btn btn-primary btn-block">
+              🛒 Xác Nhận Đặt Hàng
+            </button>
           </div>
 
           <div class="info-card">
