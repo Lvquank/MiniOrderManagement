@@ -258,7 +258,7 @@ async function loadProducts(page = 1) {
         <td>${formatVND(p.price)}</td>
         <td>
           <span class="status-badge ${p.stock > 0 ? 'badge-confirmed' : 'badge-failed'}">
-            ${p.stock} tồn
+            ${p.stock}
           </span>
         </td>
         <td>${formatDate(p.createdAt)}</td>
