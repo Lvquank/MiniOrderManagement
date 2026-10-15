@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HEMIDI - Mini Order Management System</title>
+  <title>Hệ Thống Quản Lý Đơn Hàng & Kho Hàng</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,16 +14,16 @@
     <!-- Header -->
     <header class="top-nav">
       <div class="nav-left">
-        <div class="brand-badge">HEMIDI</div>
+        <div class="brand-badge">STORE</div>
         <div class="brand-title">
-          <h1>Mini Order Management</h1>
-          <span class="subtext">Fresher NodeJS Developer · NestJS + TypeORM + BullMQ + Redis</span>
+          <h1>Hệ Thống Bán Hàng & Đơn Hàng</h1>
+          <span class="subtext">Quản lý kho hàng & Xử lý đơn hàng trực tuyến</span>
         </div>
       </div>
       <div class="nav-right">
-        <a href="/api/docs" target="_blank" class="nav-link docs-link">
+        <a href="/api/docs" target="_blank" class="nav-link docs-link" title="Xem Swagger API Docs">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-          Swagger Docs (/api/docs)
+          Tài Liệu API
         </a>
         <button id="btn-refresh" class="btn btn-outline" title="Làm mới dữ liệu">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -35,20 +35,20 @@
     <!-- Navigation Tabs -->
     <nav class="tab-bar">
       <button class="tab-btn active" data-tab="tab-products">
-        <span class="tab-icon">📦</span> Sản Phẩm & Tồn Kho
+        <span class="tab-icon">📦</span> Quản Lý Sản Phẩm
       </button>
       <button class="tab-btn" data-tab="tab-order-create">
-        <span class="tab-icon">🛒</span> Đặt Đơn Hàng Mới
+        <span class="tab-icon">🛒</span> Đặt Đơn Hàng
       </button>
       <button class="tab-btn highlight-tab" data-tab="tab-concurrency">
-        <span class="tab-icon">⚡</span> Test Đua Tồn Kho (Concurrency)
+        <span class="tab-icon">⚡</span> Thử Nghiệm Mua Nhanh
       </button>
       <button class="tab-btn" data-tab="tab-orders">
-        <span class="tab-icon">📑</span> Quản Lý Đơn & BullMQ Jobs
+        <span class="tab-icon">📑</span> Quản Lý Đơn Hàng
         <span id="pending-count-badge" class="badge-counter" style="display:none;">0</span>
       </button>
       <button class="tab-btn" data-tab="tab-logs">
-        <span class="tab-icon">🔔</span> Nhật Ký Thông Báo
+        <span class="tab-icon">🔔</span> Lịch Sử Thông Báo
       </button>
     </nav>
 
@@ -62,7 +62,7 @@
         <div class="pane-header">
           <div>
             <h2>Danh Sách Sản Phẩm & Tồn Kho</h2>
-            <p class="description">Hỗ trợ tìm kiếm theo tên, lọc khoảng giá, quản lý tồn kho và xóa mềm (Soft Delete).</p>
+            <p class="description">Tìm kiếm sản phẩm, lọc theo mức giá và theo dõi số lượng tồn kho theo thời gian thực.</p>
           </div>
           <button id="btn-open-create-product" class="btn btn-primary">
             + Thêm Sản Phẩm Mới
@@ -103,8 +103,8 @@
       <section id="tab-order-create" class="tab-pane">
         <div class="pane-header">
           <div>
-            <h2>Đặt Hàng Trực Tiếp (Create Order)</h2>
-            <p class="description">Mỗi đơn hàng được kiểm tra tồn kho bằng Pessimistic Lock và tạo job xử lý nền 3-5s với BullMQ.</p>
+            <h2>Tạo Đơn Hàng Mới</h2>
+            <p class="description">Chọn sản phẩm và số lượng để tạo đơn hàng mới vào hệ thống.</p>
           </div>
         </div>
 
@@ -136,33 +136,33 @@
               </div>
 
               <button type="submit" id="btn-submit-order" class="btn btn-primary btn-block">
-                🛒 Xác Nhận Đặt Hàng (POST /orders)
+                🛒 Xác Nhận Đặt Hàng
               </button>
             </form>
           </div>
 
           <div class="info-card">
-            <h3>Luồng Xử Lý Backend Theo Yêu Cầu Đề Bài</h3>
+            <h3>Quy Trình Xử Lý Đơn Hàng</h3>
             <div class="flow-steps">
               <div class="step-item">
                 <span class="step-num">1</span>
                 <div>
-                  <strong>Transaction & Pessimistic Lock</strong>
-                  <p>Khóa dòng sản phẩm với <code>SELECT ... FOR UPDATE</code>. Trừ kho tức thời và lưu unitPrice lịch sử vào <code>order_items</code>.</p>
+                  <strong>Kiểm Tra Kho Tức Thời</strong>
+                  <p>Hệ thống tự động kiểm tra số lượng hàng trong kho để đảm bảo luôn còn hàng trước khi tiếp nhận đơn.</p>
                 </div>
               </div>
               <div class="step-item">
                 <span class="step-num">2</span>
                 <div>
-                  <strong>Khởi Tạo Đơn & Job BullMQ</strong>
-                  <p>Tạo đơn trạng thái <code>PENDING</code>. Đẩy job vào queue <code>order-processing</code> với cấu hình retry tối đa 3 lần, backoff exponential.</p>
+                  <strong>Xác Nhận & Đóng Gói Tự Động</strong>
+                  <p>Đơn hàng được đưa vào tiến trình xử lý tự động trong vài giây và liên tục cập nhật trạng thái.</p>
                 </div>
               </div>
               <div class="step-item">
                 <span class="step-num">3</span>
                 <div>
-                  <strong>Worker Xử Lý Nền (3-5s)</strong>
-                  <p>Giả lập xử lý 3-5 giây. Xác suất lỗi ~30%. Khi thành công chuyển <code>CONFIRMED</code> và ghi <code>notification_logs</code>. Nếu hết 3 lần thử thất bại → chuyển <code>FAILED</code> và tự động hoàn trả tồn kho!</p>
+                  <strong>Thông Báo Email & Đảm Bảo Đơn Hàng</strong>
+                  <p>Khách hàng nhận thông báo chi tiết qua email. Nếu có bất kỳ sự cố nào, số lượng hàng sẽ được tự động hoàn lại kho.</p>
                 </div>
               </div>
             </div>
@@ -174,20 +174,20 @@
       <section id="tab-concurrency" class="tab-pane">
         <div class="pane-header">
           <div>
-            <h2>⚡ Test Đua Tồn Kho (Race Condition Simulator)</h2>
-            <p class="description">Mô phỏng trường hợp <strong>10 khách hàng cùng lúc đặt mua 1 sản phẩm chỉ còn đúng 1 tồn kho</strong> tại cùng một mili-giây.</p>
+            <h2>⚡ Thử Nghiệm Mua Nhanh (Flash Sale)</h2>
+            <p class="description">Mô phỏng tình huống nhiều khách hàng cùng lúc bấm mua 1 sản phẩm có số lượng giới hạn.</p>
           </div>
         </div>
 
         <div class="concurrency-hero-card">
           <div class="hero-left">
-            <span class="tag-accent">Bảo Vệ Tồn Kho Tuyệt Đối</span>
-            <h3>Kiểm Chứng Cơ Chế Chống Bán Vượt Tồn Kho</h3>
-            <p>Hệ thống sử dụng cơ chế <strong>Pessimistic Locking (SELECT ... FOR UPDATE)</strong> trong PostgreSQL. Dù 10 hoặc 100 requests đến đồng thời, chỉ <strong>đúng 1 đơn hàng duy nhất</strong> được tạo thành công (201 Created), các requests còn lại sẽ nhận phản hồi lỗi 400 Bad Request rõ ràng và tồn kho cuối cùng luôn là 0, không bao giờ bị âm!</p>
+            <span class="tag-accent">Kiểm Soát Tồn Kho Chính Xác</span>
+            <h3>Đảm Bảo Không Bao Giờ Bán Vượt Tồn Kho</h3>
+            <p>Hệ thống bảo vệ kho hàng thông minh: khi nhiều khách hàng cùng đặt mua sản phẩm có số lượng giới hạn, chỉ khách hàng nhanh nhất mua được hàng. Các khách hàng còn lại sẽ nhận thông báo hết hàng và tồn kho luôn chính xác, không bao giờ bị âm.</p>
             
             <div class="concurrency-actions">
               <button id="btn-run-race-test" class="btn btn-race">
-                🚀 Bắt Đầu Bắn 10 Request Đồng Thời (Run Concurrency Test)
+                🚀 Thử Nghiệm 10 Lượt Đặt Mua Cùng Lúc
               </button>
               <button id="btn-reset-test-item" class="btn btn-outline">
                 🔄 Đặt Lại Tồn Kho = 1
@@ -197,11 +197,11 @@
 
           <div class="hero-right">
             <div class="stat-box">
-              <span class="stat-label">Sản Phẩm Test:</span>
+              <span class="stat-label">Sản Phẩm Thử Nghiệm:</span>
               <span class="stat-value" id="race-product-name">Đang tải...</span>
             </div>
             <div class="stat-box">
-              <span class="stat-label">Tồn Kho Hiện Tại:</span>
+              <span class="stat-label">Số Lượng Còn Lại:</span>
               <span class="stat-value highlight-stock" id="race-product-stock">-</span>
             </div>
           </div>
@@ -210,23 +210,23 @@
         <!-- Concurrency Live Results -->
         <div id="concurrency-results-container" style="display:none;" class="results-container">
           <div class="results-header">
-            <h3>Kết Quả 10 Requests Đồng Thời:</h3>
+            <h3>Kết Quả 10 Lượt Đặt Mua Cùng Lúc:</h3>
             <div class="stats-pills">
-              <span class="pill pill-success">Thành công (201): <strong id="race-count-success">0</strong></span>
-              <span class="pill pill-danger">Từ chối (400): <strong id="race-count-failed">0</strong></span>
-              <span class="pill pill-info">Thời gian chạy: <strong id="race-time-elapsed">0ms</strong></span>
+              <span class="pill pill-success">Thành công: <strong id="race-count-success">0</strong></span>
+              <span class="pill pill-danger">Hết hàng: <strong id="race-count-failed">0</strong></span>
+              <span class="pill pill-info">Thời gian: <strong id="race-time-elapsed">0ms</strong></span>
             </div>
           </div>
           <div class="requests-grid" id="concurrency-requests-grid"></div>
         </div>
       </section>
 
-      <!-- TAB 4: ORDERS & BULLMQ JOBS -->
+      <!-- TAB 4: ORDERS -->
       <section id="tab-orders" class="tab-pane">
         <div class="pane-header">
           <div>
-            <h2>Quản Lý Đơn Hàng & Giám Sát Job BullMQ</h2>
-            <p class="description">Theo dõi trạng thái đơn hàng theo thời gian thực (PENDING ➔ CONFIRMED hoặc FAILED). Xem chi tiết số lần retry của BullMQ và hủy đơn hoàn kho.</p>
+            <h2>Quản Lý Đơn Hàng</h2>
+            <p class="description">Theo dõi trạng thái đơn hàng theo thời gian thực (Đang xử lý ➔ Đã xác nhận hoặc Thất bại). Hỗ trợ xem tiến trình và hủy đơn hoàn kho.</p>
           </div>
           <div class="auto-refresh-toggle">
             <label class="switch">
@@ -240,10 +240,10 @@
         <div class="filter-card">
           <div class="filter-status-buttons" id="order-status-filters">
             <button class="status-filter-btn active" data-status="">Tất Cả</button>
-            <button class="status-filter-btn" data-status="PENDING">PENDING (Đang Xử Lý)</button>
-            <button class="status-filter-btn" data-status="CONFIRMED">CONFIRMED (Thành Công)</button>
-            <button class="status-filter-btn" data-status="CANCELLED">CANCELLED (Đã Hủy)</button>
-            <button class="status-filter-btn" data-status="FAILED">FAILED (Thất Bại)</button>
+            <button class="status-filter-btn" data-status="PENDING">Đang Xử Lý</button>
+            <button class="status-filter-btn" data-status="CONFIRMED">Đã Xác Nhận</button>
+            <button class="status-filter-btn" data-status="CANCELLED">Đã Hủy</button>
+            <button class="status-filter-btn" data-status="FAILED">Thất Bại</button>
           </div>
         </div>
 
@@ -272,8 +272,8 @@
       <section id="tab-logs" class="tab-pane">
         <div class="pane-header">
           <div>
-            <h2>Nhật Ký Thông Báo (Notification Logs)</h2>
-            <p class="description">Ghi lại toàn bộ thông báo hệ thống được kích hoạt bởi worker BullMQ khi đơn hàng CONFIRMED, FAILED, hoặc CANCELLED.</p>
+            <h2>Lịch Sử Thông Báo</h2>
+            <p class="description">Danh sách thông báo tự động gửi đến khách hàng khi đơn hàng được xử lý hoặc thay đổi trạng thái.</p>
           </div>
         </div>
 
@@ -301,11 +301,11 @@
     <div id="modal-job-details" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-header">
-          <h3>Chi Tiết Job BullMQ (`order-processing`)</h3>
+          <h3>Tiến Trình Xử Lý Đơn Hàng</h3>
           <button class="btn-close-modal" data-close="modal-job-details">&times;</button>
         </div>
         <div class="modal-body" id="job-details-content">
-          Đang tải thông tin job...
+          Đang tải thông tin tiến trình...
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" data-close="modal-job-details">Đóng</button>

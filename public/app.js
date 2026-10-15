@@ -101,7 +101,7 @@ async function loadProducts(page = 1) {
         <td>${formatDate(p.createdAt)}</td>
         <td>
           <button class="btn btn-sm btn-outline" onclick="updateProductStock('${p.id}', ${p.stock})">Sửa kho</button>
-          <button class="btn btn-sm btn-danger-outline" onclick="deleteProduct('${p.id}')">Xóa mềm</button>
+          <button class="btn btn-sm btn-danger-outline" onclick="deleteProduct('${p.id}')">Xóa</button>
         </td>
       </tr>
     `,
@@ -151,12 +151,12 @@ document.getElementById('create-product-form').addEventListener('submit', async 
 });
 
 async function deleteProduct(id) {
-  if (!confirm('Bạn có chắc muốn xóa mềm sản phẩm này?')) return;
+  if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
   try {
     const res = await fetch(`${API_BASE}/products/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message);
-    showToast('Sản phẩm đã được xóa mềm thành công!', 'success');
+    showToast('Đã xóa sản phẩm thành công!', 'success');
     loadProducts();
   } catch (err) {
     showToast(err.message, 'error');
@@ -238,7 +238,7 @@ document.getElementById('order-form').addEventListener('submit', async (e) => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Lỗi khi tạo đơn hàng');
 
-    showToast(`Tạo đơn hàng #${data.id.substring(0, 8)} thành công (PENDING)! Job BullMQ đã được đẩy vào queue.`, 'success');
+    showToast(`Tạo đơn hàng #${data.id.substring(0, 8)} thành công! Đơn hàng đang được tự động xử lý.`, 'success');
     loadProductOptions();
 
     // Switch to orders tab
@@ -249,11 +249,11 @@ document.getElementById('order-form').addEventListener('submit', async (e) => {
     showToast(err.message, 'error');
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = '🛒 Xác Nhận Đặt Hàng (POST /orders)';
+    submitBtn.textContent = '🛒 Xác Nhận Đặt Hàng';
   }
 });
 
-// ===================== TAB 3: CONCURRENCY RACE TEST =====================
+// ===================== TAB 3: CONCURRENCY SIMULATOR =====================
 async function loadConcurrencyProduct() {
   try {
     const res = await fetch(`${API_BASE}/products?search=LIMITED-EDITION-ITEM`);
@@ -308,11 +308,11 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
   const container = document.getElementById('concurrency-results-container');
   const grid = document.getElementById('concurrency-requests-grid');
   container.style.display = 'block';
-  grid.innerHTML = '<div class="text-center" style="grid-column: 1/-1;">Đang bắn 10 requests đồng thời...</div>';
+  grid.innerHTML = '<div class="text-center" style="grid-column: 1/-1;">Đang xử lý 10 lượt đặt mua cùng lúc...</div>';
 
   const btn = document.getElementById('btn-run-race-test');
   btn.disabled = true;
-  btn.textContent = '⏳ Đang bắn 10 requests cùng lúc...';
+  btn.textContent = '⏳ Đang xử lý 10 lượt đặt mua...';
 
   const N = 10;
   const startTime = Date.now();
@@ -324,7 +324,7 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerName: `Khách Hàng #${custIdx}`,
-        customerEmail: `racer${custIdx}@example.com`,
+        customerEmail: `khachhang${custIdx}@example.com`,
         items: [{ productId: testConcurrencyProduct.id, quantity: 1 }],
       }),
     }).then(async (res) => {
@@ -337,7 +337,7 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
   const elapsed = Date.now() - startTime;
 
   btn.disabled = false;
-  btn.textContent = '🚀 Bắt Đầu Bắn 10 Request Đồng Thời (Run Concurrency Test)';
+  btn.textContent = '🚀 Thử Nghiệm 10 Lượt Đặt Mua Cùng Lúc';
 
   // Calculate stats
   const successCount = results.filter((r) => r.status === 201).length;
@@ -353,9 +353,9 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
       (r) => `
     <div class="req-card ${r.status === 201 ? 'success' : 'failed'}">
       <div><strong>Khách Hàng #${r.custIdx}</strong></div>
-      <div>HTTP Status: <strong>${r.status} ${r.status === 201 ? 'Created ✅' : 'Bad Request ❌'}</strong></div>
+      <div>Trạng Thái: <strong>${r.status === 201 ? 'Đặt Hàng Thành Công ✅' : 'Hết Hàng ❌'}</strong></div>
       <div style="margin-top: 4px; font-size: 0.8rem; color: #475569;">
-        ${r.status === 201 ? `Mã Đơn: <code>${r.body.id.substring(0, 8)}...</code>` : r.body.message}
+        ${r.status === 201 ? `Mã Đơn: <code>${r.body.id.substring(0, 8)}...</code>` : 'Sản phẩm đã hết hàng, vui lòng thử lại sau.'}
       </div>
     </div>
   `,
@@ -366,9 +366,9 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
   await loadConcurrencyProduct();
 
   if (successCount === 1 && failedCount === N - 1) {
-    showToast('🏆 Tuyệt vời! Chỉ đúng 1 đơn hàng được tạo, 9 đơn bị từ chối. Không hề bán vượt tồn kho!', 'success');
+    showToast('🏆 Hoàn hảo! Đúng 1 khách hàng đặt thành công, các lượt mua sau nhận thông báo hết hàng. Tồn kho không bị âm!', 'success');
   } else {
-    showToast(`Kết quả: ${successCount} thành công, ${failedCount} thất bại.`, 'info');
+    showToast(`Kết quả: ${successCount} thành công, ${failedCount} thông báo hết hàng.`, 'info');
   }
 });
 
@@ -405,12 +405,12 @@ async function loadOrders() {
 
         const statusText =
           o.status === 'PENDING'
-            ? '⏳ PENDING (Đang xử lý 3-5s)'
+            ? '⏳ Đang Xử Lý'
             : o.status === 'CONFIRMED'
-            ? '✅ CONFIRMED'
+            ? '✅ Đã Xác Nhận'
             : o.status === 'FAILED'
-            ? '❌ FAILED'
-            : '🚫 CANCELLED';
+            ? '❌ Thất Bại'
+            : '🚫 Đã Hủy';
 
         const itemsDesc = (o.items || [])
           .map((item) => `${item.product?.name || 'Sản phẩm'} (x${item.quantity})`)
@@ -431,12 +431,12 @@ async function loadOrders() {
           <td>${formatDate(o.createdAt)}</td>
           <td>
             <div style="display:flex; gap:6px;">
-              <button class="btn btn-sm btn-outline" onclick="viewJobStatus('${o.id}')" title="Xem tiến trình BullMQ">
-                🔍 Job BullMQ
+              <button class="btn btn-sm btn-outline" onclick="viewJobStatus('${o.id}')" title="Xem tiến trình xử lý">
+                🔍 Tiến Trình
               </button>
               ${
                 canCancel
-                  ? `<button class="btn btn-sm btn-danger-outline" onclick="cancelOrder('${o.id}')" title="Hủy và hoàn kho">
+                  ? `<button class="btn btn-sm btn-danger-outline" onclick="cancelOrder('${o.id}')" title="Hủy đơn và hoàn kho">
                       Hủy đơn
                     </button>`
                   : ''
@@ -475,18 +475,25 @@ async function viewJobStatus(orderId) {
   const modal = document.getElementById('modal-job-details');
   const content = document.getElementById('job-details-content');
   modal.classList.add('open');
-  content.innerHTML = '<div class="text-center">Đang truy vấn Redis BullMQ...</div>';
+  content.innerHTML = '<div class="text-center">Đang tải tiến trình xử lý...</div>';
 
   try {
     const res = await fetch(`${API_BASE}/orders/${orderId}/jobs`);
     const job = await res.json();
 
+    const stateDisplay =
+      job.state === 'completed'
+        ? '✅ ĐÃ HOÀN THÀNH'
+        : job.state === 'failed'
+        ? '❌ THẤT BẠI'
+        : '⏳ ĐANG XỬ LÝ';
+
     content.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div><strong>Mã Đơn Hàng:</strong> <code>${orderId}</code></div>
-        <div><strong>BullMQ Job ID:</strong> <code>${job.jobId}</code></div>
+        <div><strong>Mã Tiến Trình:</strong> <code>${job.jobId}</code></div>
         <div>
-          <strong>Trạng Thái Job (BullMQ State):</strong>
+          <strong>Trạng Thái Xử Lý:</strong>
           <span class="status-badge ${
             job.state === 'completed'
               ? 'badge-confirmed'
@@ -494,26 +501,26 @@ async function viewJobStatus(orderId) {
               ? 'badge-failed'
               : 'badge-pending'
           }">
-            ${job.state.toUpperCase()}
+            ${stateDisplay}
           </span>
         </div>
         <div>
-          <strong>Số lần đã thử (Attempts Made):</strong>
-          <strong>${job.attemptsMade} / ${job.maxAttempts}</strong>
+          <strong>Lượt Thử Nghiệm Xử Lý:</strong>
+          <strong>${job.attemptsMade} / ${job.maxAttempts} lượt</strong>
         </div>
         ${
           job.failedReason
             ? `<div style="background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:6px; color:#991b1b;">
-                <strong>Lý do lỗi (Failed Reason):</strong><br>${job.failedReason}
+                <strong>Ghi Chú Lỗi:</strong><br>${job.failedReason}
                </div>`
             : ''
         }
-        <div><strong>Thời Điểm Khởi Tạo:</strong> ${job.timestamp ? formatDate(new Date(job.timestamp)) : '-'}</div>
-        <div><strong>Thời Điểm Xử Lý Xong:</strong> ${job.finishedOn ? formatDate(new Date(job.finishedOn)) : '-'}</div>
+        <div><strong>Thời Điểm Tiếp Nhận:</strong> ${job.timestamp ? formatDate(new Date(job.timestamp)) : '-'}</div>
+        <div><strong>Thời Điểm Hoàn Tất:</strong> ${job.finishedOn ? formatDate(new Date(job.finishedOn)) : '-'}</div>
       </div>
     `;
   } catch (err) {
-    content.innerHTML = `<div class="text-center" style="color:var(--danger)">Lỗi khi truy vấn: ${err.message}</div>`;
+    content.innerHTML = `<div class="text-center" style="color:var(--danger)">Lỗi khi tải thông tin: ${err.message}</div>`;
   }
 }
 
