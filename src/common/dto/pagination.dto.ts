@@ -8,6 +8,7 @@ export class PaginationDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(2147483647)
   page?: number = 1;
 
   @ApiPropertyOptional({ description: 'Number of items per page', default: 10 })

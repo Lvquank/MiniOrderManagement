@@ -17,7 +17,7 @@ async function bootstrap() {
       transform: true,
       forbidNonWhitelisted: true,
       transformOptions: {
-        enableImplicitConversion: true,
+        enableImplicitConversion: false,
       },
     }),
   );
@@ -40,8 +40,9 @@ Backend system for an online store: Products, Inventory, Orders, and BullMQ Back
 
 ### Key Capabilities:
 - **Products**: CRUD, soft delete, pagination, name search, price filtering.
-- **Orders**: Atomic transactions, row-level pessimistic locking (\`SELECT ... FOR UPDATE\`) preventing overselling under heavy concurrency.
-- **BullMQ Queue ('order-processing')**: Background simulated 3-5s processing, ~30% random error with 3 exponential retries, auto-fail and stock refund, idempotency guard.
+- **Orders**: Atomic transactions and row-level pessimistic locking (\`SELECT ... FOR UPDATE\`).
+- **BullMQ Queue ('order-processing')**: Simulated 3-5s processing, ~30% random error, 3 total attempts with exponential backoff (2s, 4s), stock refund and idempotency guards.
+- **Recovery**: Worker reconciles PENDING orders every 5s to recover missing jobs and retry failed stock refunds.
 - **Repeatable Cleanup**: 5-minute cron job auto-cancelling stale PENDING orders (>30m) and refunding stock.
       `,
     )
@@ -61,10 +62,14 @@ Backend system for an online store: Products, Inventory, Orders, and BullMQ Back
   });
 
   const port = process.env.PORT || 3000;
+  app.enableShutdownHooks();
   await app.listen(port);
   logger.log(`🚀 Application is running on: http://localhost:${port}`);
   logger.log(`📚 Swagger documentation available at: http://localhost:${port}/api/docs`);
   logger.log(`🖥️ Web Dashboard available at: http://localhost:${port}`);
 }
 
-bootstrap();
+bootstrap().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

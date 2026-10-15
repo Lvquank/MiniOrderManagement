@@ -2,7 +2,7 @@
  * Concurrency & Overselling Prevention Test Script
  *
  * This script simulates N simultaneous customers trying to purchase
- * the exact same item that only has 1 unit in stock at the exact same millisecond.
+ * the exact same item that only has 1 unit in stock with overlapping requests.
  *
  * Expected outcome:
  * - Exactly 1 order succeeds (HTTP 201)
@@ -17,56 +17,27 @@ async function runConcurrencyTest() {
   console.log(`Target API: ${BASE_URL}`);
   console.log(`======================================================\n`);
 
-  // 1. Fetch products to find the limited edition item (stock = 1) or create one
-  console.log('1️⃣ Looking for test item with stock = 1...');
-  let targetProduct: any = null;
-
-  try {
-    const res = await fetch(`${BASE_URL}/products?search=LIMITED-EDITION-ITEM`);
-    const data = await res.json();
-    if (data.data && data.data.length > 0) {
-      targetProduct = data.data[0];
-    }
-  } catch (err) {
-    console.error(`❌ Could not connect to API server at ${BASE_URL}. Ensure the server is running!`, err.message);
-    process.exit(1);
-  }
-
-  // If not found or stock is not 1, update or create it
-  if (!targetProduct) {
-    console.log('Creating a dedicated product for concurrency testing with stock = 1...');
-    const createRes = await fetch(`${BASE_URL}/products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sku: `CONCURRENCY-TEST-${Date.now()}`,
-        name: 'Sản phẩm Test Độc Quyền (Stock = 1)',
-        price: 500000,
-        stock: 1,
-      }),
-    });
-    targetProduct = await createRes.json();
-  } else {
-    // Reset stock to 1
-    await fetch(`${BASE_URL}/products/${targetProduct.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stock: 1 }),
-    });
-    targetProduct.stock = 1;
-  }
-
-  console.log(`🎯 Target Product: "${targetProduct.name}" (ID: ${targetProduct.id})`);
-  console.log(`📦 Current Stock before test: ${targetProduct.stock} unit\n`);
+  const createResponse = await fetch(`${BASE_URL}/products`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(15000),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sku: `CONCURRENCY-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: 'Concurrency test product', price: 500000, stock: 1,
+    }),
+  });
+  const targetProduct = await createResponse.json();
+  if (!createResponse.ok) throw new Error(`Could not create test product: ${targetProduct.message}`);
 
   // 2. Prepare 10 concurrent requests
   const CONCURRENT_REQUESTS = 10;
-  console.log(`2️⃣ Firing ${CONCURRENT_REQUESTS} simultaneous order requests at the exact same time...`);
+  console.log(`2️⃣ Firing ${CONCURRENT_REQUESTS} simultaneous order requests concurrently...`);
 
   const promises = Array.from({ length: CONCURRENT_REQUESTS }).map((_, index) => {
     const customerIndex = index + 1;
     return fetch(`${BASE_URL}/orders`, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerName: `Khách Hàng Đồng Thời #${customerIndex}`,
@@ -111,7 +82,7 @@ async function runConcurrencyTest() {
   });
 
   // 4. Verify final stock
-  const finalProductRes = await fetch(`${BASE_URL}/products/${targetProduct.id}`);
+  const finalProductRes = await fetch(`${BASE_URL}/products/${targetProduct.id}`, { signal: AbortSignal.timeout(15000) });
   const finalProduct = await finalProductRes.json();
 
   console.log('\n================ SUMMARY ================');

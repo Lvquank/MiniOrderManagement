@@ -15,6 +15,7 @@ import { QueryOrderDto } from './dto/query-order.dto';
 import { OrderProcessingService } from '../order-processing/order-processing.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
+import { restoreStock } from './restore-stock';
 
 @Injectable()
 export class OrdersService {
@@ -32,10 +33,6 @@ export class OrdersService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  /**
-   * Creates an order with strict inventory checks and pessimistic row-level locking
-   * to completely prevent race conditions and overselling.
-   */
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
     const { customerName, customerEmail, items } = createOrderDto;
 
@@ -45,12 +42,11 @@ export class OrdersService {
     );
 
     const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
     let createdOrder: Order;
 
     try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
       let totalAmount = 0;
       const orderItemsToSave: {
         productId: string;
@@ -59,7 +55,7 @@ export class OrdersService {
       }[] = [];
 
       for (const item of sortedItems) {
-        // Pessimistic write lock: blocks any other transaction from reading or writing this row
+        // Serialize inventory changes for this product until the transaction commits.
         const product = await queryRunner.manager.findOne(Product, {
           where: { id: item.productId },
           lock: { mode: 'pessimistic_write' },
@@ -82,8 +78,11 @@ export class OrdersService {
         await queryRunner.manager.save(product);
 
         const unitPrice = Number(product.price);
-        const itemSubtotal = unitPrice * item.quantity;
+        const itemSubtotal = Math.round(unitPrice * 100) * item.quantity;
         totalAmount += itemSubtotal;
+        if (!Number.isSafeInteger(totalAmount) || totalAmount > 999999999999) {
+          throw new BadRequestException('Order total exceeds the supported amount');
+        }
 
         orderItemsToSave.push({
           productId: product.id,
@@ -96,7 +95,7 @@ export class OrdersService {
       const order = queryRunner.manager.create(Order, {
         customerName,
         customerEmail,
-        totalAmount,
+        totalAmount: totalAmount / 100,
         status: OrderStatus.PENDING,
       });
 
@@ -116,7 +115,7 @@ export class OrdersService {
       await queryRunner.commitTransaction();
       this.logger.log(`🛒 Order #${createdOrder.id} successfully created. Status: PENDING`);
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
@@ -129,7 +128,7 @@ export class OrdersService {
       this.logger.error(
         `Failed to push order #${createdOrder.id} to queue: ${queueError.message}`,
       );
-      // The order is safely saved as PENDING; retry or background scheduler will catch it
+      // The worker reconciles committed PENDING orders with missing jobs every 5 seconds.
     }
 
     // Return the full order with items
@@ -184,12 +183,11 @@ export class OrdersService {
    */
   async cancel(id: string): Promise<{ message: string; order: Order }> {
     const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
     let updatedOrder: Order;
 
     try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
       const order = await queryRunner.manager
         .createQueryBuilder(Order, 'order')
         .setLock('pessimistic_write')
@@ -199,10 +197,6 @@ export class OrdersService {
       if (!order) {
         throw new NotFoundException(`Order with ID "${id}" not found`);
       }
-
-      order.items = await queryRunner.manager.find(OrderItem, {
-        where: { orderId: order.id },
-      });
 
       if (order.status === OrderStatus.CANCELLED) {
         throw new BadRequestException('Order is already cancelled');
@@ -221,18 +215,7 @@ export class OrdersService {
         );
       }
 
-      // Restore stock for all items
-      for (const item of order.items) {
-        await queryRunner.manager.increment(
-          Product,
-          { id: item.productId },
-          'stock',
-          item.quantity,
-        );
-        this.logger.log(
-          `Restored ${item.quantity} units to stock for product #${item.productId}`,
-        );
-      }
+      await restoreStock(queryRunner.manager, order.id);
 
       order.status = OrderStatus.CANCELLED;
       updatedOrder = await queryRunner.manager.save(order);
@@ -250,7 +233,7 @@ export class OrdersService {
       await queryRunner.commitTransaction();
       this.logger.log(`Order #${order.id} cancelled and inventory restored.`);
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();

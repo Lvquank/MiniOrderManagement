@@ -5,6 +5,7 @@
   "author": "Fresher NodeJS Developer",
   "private": true,
   "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -12,6 +13,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main",
+    "start:worker": "node dist/src/worker",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
@@ -19,7 +21,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:concurrency": "ts-node -r tsconfig-paths/register scripts/test-concurrency.ts"
+    "test:concurrency": "ts-node -r tsconfig-paths/register scripts/test-concurrency.ts",
+    "test:integration": "jest --config test/jest-integration.json --runInBand"
   },
   "dependencies": {
     "@neon/config": "^1.9.1",

@@ -2,10 +2,9 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -82,28 +81,25 @@ export class ProductsService {
   }
 
   async update(id: string, updateProductDto: UpdateProductDto): Promise<Product> {
-    const product = await this.findOne(id);
-
-    if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
-      const existingSku = await this.productRepository.findOne({
-        where: { sku: updateProductDto.sku },
-        withDeleted: true,
-      });
-
-      if (existingSku && existingSku.id !== id) {
-        throw new ConflictException(
-          `Product with SKU "${updateProductDto.sku}" already exists`,
-        );
-      }
+    if (Object.keys(updateProductDto).length === 0) {
+      return this.findOne(id);
     }
-
-    Object.assign(product, updateProductDto);
-    return await this.productRepository.save(product);
+    // Update only submitted columns so a rename cannot restore a stale stock value.
+    const result = await this.productRepository.update(
+      { id, deletedAt: IsNull() },
+      updateProductDto,
+    );
+    if (!result.affected) {
+      throw new NotFoundException(`Product with ID "${id}" not found`);
+    }
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<{ message: string; id: string }> {
-    const product = await this.findOne(id);
-    await this.productRepository.softRemove(product);
+    const result = await this.productRepository.softDelete({ id, deletedAt: IsNull() });
+    if (!result.affected) {
+      throw new NotFoundException(`Product with ID "${id}" not found`);
+    }
     return {
       message: `Product with ID "${id}" soft deleted successfully`,
       id,

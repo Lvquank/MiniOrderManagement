@@ -25,7 +25,8 @@ describe('ProductsService', () => {
       find: jest.fn(),
       create: jest.fn().mockImplementation((dto) => dto),
       save: jest.fn().mockImplementation((p) => Promise.resolve({ ...mockProduct, ...p })),
-      softRemove: jest.fn().mockResolvedValue(mockProduct),
+      softDelete: jest.fn().mockResolvedValue({ affected: 1 }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       createQueryBuilder: jest.fn(),
     };
 
@@ -74,6 +75,21 @@ describe('ProductsService', () => {
     });
   });
 
+  it('updates only submitted fields without saving a stale stock snapshot', async () => {
+    repository.findOne.mockResolvedValue({ ...mockProduct, stock: 0, name: 'Renamed' });
+    const result = await service.update(mockProduct.id, { name: 'Renamed' });
+    expect(repository.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: mockProduct.id }), { name: 'Renamed' },
+    );
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(result.stock).toBe(0);
+  });
+
+  it('returns 404 when updating a deleted or missing product', async () => {
+    repository.update.mockResolvedValue({ affected: 0 });
+    await expect(service.update(mockProduct.id, { name: 'Renamed' })).rejects.toThrow(NotFoundException);
+  });
+
   describe('findOne', () => {
     it('should return product by id', async () => {
       repository.findOne.mockResolvedValue(mockProduct);
@@ -91,7 +107,7 @@ describe('ProductsService', () => {
     it('should soft delete product', async () => {
       repository.findOne.mockResolvedValue(mockProduct);
       const result = await service.remove('prod-uuid-1');
-      expect(repository.softRemove).toHaveBeenCalledWith(mockProduct);
+      expect(repository.softDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'prod-uuid-1' }));
       expect(result.message).toContain('soft deleted successfully');
     });
   });

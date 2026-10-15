@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
@@ -11,91 +11,64 @@ export interface OrderJobStatusResponse {
   timestamp: number | null;
   processedOn: number | null;
   finishedOn: number | null;
-  data: any;
+  data: unknown;
 }
 
 @Injectable()
-export class OrderProcessingService implements OnApplicationBootstrap {
-  private readonly logger = new Logger(OrderProcessingService.name);
+export class OrderProcessingService {
+  private cleanupScheduled = false;
 
-  constructor(
-    @InjectQueue('order-processing')
-    private readonly orderQueue: Queue,
-  ) {}
+  constructor(@InjectQueue('order-processing') private readonly orderQueue: Queue) {}
 
-  async onApplicationBootstrap() {
+  private async execute<T>(operation: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
     try {
-      // Register repeatable job to auto-cleanup stale PENDING orders every 5 minutes
-      await this.orderQueue.add(
-        'cleanup-stale-orders',
-        {},
-        {
-          jobId: 'repeatable-cleanup-stale-orders',
-          repeat: {
-            pattern: '*/5 * * * *',
-          },
-          removeOnComplete: true,
-          removeOnFail: false,
-        },
-      );
-      this.logger.log('✅ Repeatable cleanup job scheduled: runs every 5 minutes (*/5 * * * *)');
-    } catch (error) {
-      this.logger.warn(`Failed to schedule repeatable cleanup job: ${error.message}`);
+      return await Promise.race([
+        operation,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Queue unavailable; worker recovery will retry')), 3000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
+  }
+
+  async scheduleCleanup() {
+    if (this.cleanupScheduled) return;
+    await this.execute(this.orderQueue.add('cleanup-stale-orders', {}, {
+      jobId: 'repeatable-cleanup-stale-orders',
+      repeat: { pattern: '*/5 * * * *' },
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: true,
+      removeOnFail: false,
+    }));
+    this.cleanupScheduled = true;
   }
 
   async addOrderJob(orderId: string): Promise<void> {
-    await this.orderQueue.add(
-      'process-order',
-      { orderId },
-      {
-        jobId: orderId, // Ensures idempotency at the queue level
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 2000, // 2s, 4s, 8s
-        },
-        removeOnComplete: false,
-        removeOnFail: false,
-      },
-    );
-    this.logger.log(`📥 Dispatched job for order #${orderId} to "order-processing" queue`);
+    await this.execute(this.orderQueue.add('process-order', { orderId }, {
+      jobId: orderId,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: false,
+      removeOnFail: false,
+    }));
   }
 
   async getOrderJobStatus(orderId: string): Promise<OrderJobStatusResponse> {
-    const job = await this.orderQueue.getJob(orderId);
-
-    if (!job) {
-      return {
-        jobId: orderId,
-        state: 'not_found',
-        attemptsMade: 0,
-        maxAttempts: 3,
-        failedReason: null,
-        timestamp: null,
-        processedOn: null,
-        finishedOn: null,
-        data: null,
-      };
-    }
-
-    const state = await job.getState();
-
+    const job = await this.execute(this.orderQueue.getJob(orderId));
     return {
-      jobId: String(job.id),
-      state,
-      attemptsMade: job.attemptsMade,
-      maxAttempts: job.opts.attempts || 3,
-      failedReason: job.failedReason || null,
-      timestamp: job.timestamp || null,
-      processedOn: job.processedOn || null,
-      finishedOn: job.finishedOn || null,
-      data: job.data,
+      jobId: job ? String(job.id) : orderId,
+      state: job ? await this.execute(job.getState()) : 'not_found',
+      attemptsMade: job?.attemptsMade || 0,
+      maxAttempts: job?.opts.attempts || 3,
+      failedReason: job?.failedReason || null,
+      timestamp: job?.timestamp || null,
+      processedOn: job?.processedOn || null,
+      finishedOn: job?.finishedOn || null,
+      data: job?.data || null,
     };
-  }
-
-  async triggerManualCleanup(): Promise<{ message: string }> {
-    await this.orderQueue.add('cleanup-stale-orders', { manual: true });
-    return { message: 'Manual stale orders cleanup job queued successfully' };
   }
 }

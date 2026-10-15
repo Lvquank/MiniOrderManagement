@@ -2,6 +2,7 @@ import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { NotificationLog } from './entities/notification-log.entity';
+import { QueryNotificationDto } from './dto/query-notification.dto';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -12,8 +13,8 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Get latest notification logs' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'List of notification logs', type: [NotificationLog] })
-  findAll(@Query('limit') limit?: number) {
-    return this.notificationsService.findAll(limit ? Number(limit) : 50);
+  findAll(@Query() query: QueryNotificationDto) {
+    return this.notificationsService.findAll(query.limit);
   }
 
   @Get('orders/:orderId')

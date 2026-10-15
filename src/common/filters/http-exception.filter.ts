@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { QueryFailedError } from 'typeorm';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -31,8 +32,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = resObj.message || message;
         error = resObj.error || error;
       }
+    } else if (exception instanceof QueryFailedError && exception.driverError?.code === '23505') {
+      status = HttpStatus.CONFLICT;
+      message = 'Product SKU already exists';
+      error = 'Conflict';
     } else if (exception instanceof Error) {
-      message = exception.message;
       this.logger.error(`Unhandled Exception: ${exception.message}`, exception.stack);
     } else {
       this.logger.error('Unknown exception caught', exception);

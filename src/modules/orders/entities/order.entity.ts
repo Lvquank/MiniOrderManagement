@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -20,12 +21,15 @@ export enum OrderStatus {
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')
+  @ApiProperty({ format: 'uuid' })
   id: string;
 
   @Column({ type: 'varchar', length: 255 })
+  @ApiProperty({})
   customerName: string;
 
   @Column({ type: 'varchar', length: 255 })
+  @ApiProperty({})
   customerEmail: string;
 
   @Column({
@@ -35,6 +39,7 @@ export class Order {
     default: 0,
     transformer: new ColumnNumericTransformer(),
   })
+  @ApiProperty({})
   totalAmount: number;
 
   @Index()
@@ -43,14 +48,18 @@ export class Order {
     enum: OrderStatus,
     default: OrderStatus.PENDING,
   })
+  @ApiProperty({ enum: OrderStatus })
   status: OrderStatus;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
+  @ApiProperty({ type: () => [OrderItem] })
   items: OrderItem[];
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
+  @ApiProperty({})
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamp with time zone' })
+  @ApiProperty({})
   updatedAt: Date;
 }

@@ -40,6 +40,7 @@ describe('OrdersService', () => {
 
   beforeEach(async () => {
     mockQueryRunner = {
+      isTransactionActive: true,
       connect: jest.fn().mockResolvedValue(undefined),
       startTransaction: jest.fn().mockResolvedValue(undefined),
       commitTransaction: jest.fn().mockResolvedValue(undefined),
@@ -81,6 +82,23 @@ describe('OrdersService', () => {
     }).compile();
 
     service = module.get<OrdersService>(OrdersService);
+  });
+
+  it('rejects a total larger than numeric(12,2) and rolls back', async () => {
+    mockQueryRunner.manager.findOne.mockResolvedValue({ ...mockProduct, stock: 2, price: 9999999999.99 });
+    await expect(service.create({ customerName: 'Test', customerEmail: 'test@example.com', items: [{ productId: mockProduct.id, quantity: 2 }] }))
+      .rejects.toThrow('Order total exceeds the supported amount');
+    expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(orderProcessingService.addOrderJob).not.toHaveBeenCalled();
+  });
+
+  it('releases the query runner when connecting fails', async () => {
+    mockQueryRunner.isTransactionActive = false;
+    mockQueryRunner.connect.mockRejectedValue(new Error('Database unavailable'));
+    await expect(service.create({ customerName: 'Test', customerEmail: 'test@example.com', items: [{ productId: mockProduct.id, quantity: 1 }] }))
+      .rejects.toThrow('Database unavailable');
+    expect(mockQueryRunner.release).toHaveBeenCalled();
+    expect(mockQueryRunner.rollbackTransaction).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

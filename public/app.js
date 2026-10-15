@@ -11,6 +11,12 @@ let currentProductsPage = 1;
 let currentOrdersPage = 1;
 
 // Helpers
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[char]));
+}
+
 function formatVND(amount) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 }
@@ -159,6 +165,7 @@ async function loadProducts(page = 1) {
   try {
     const res = await fetch(url);
     const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Không thể tải dữ liệu');
     const tbody = document.getElementById('products-table-body');
 
     if (!result.data || result.data.length === 0) {
@@ -171,8 +178,8 @@ async function loadProducts(page = 1) {
       .map(
         (p) => `
       <tr>
-        <td><code>${p.sku}</code></td>
-        <td><strong>${p.name}</strong></td>
+        <td><code>${escapeHtml(p.sku)}</code></td>
+        <td><strong>${escapeHtml(p.name)}</strong></td>
         <td>${formatVND(p.price)}</td>
         <td>
           <span class="status-badge ${p.stock > 0 ? 'badge-confirmed' : 'badge-failed'}">
@@ -181,8 +188,8 @@ async function loadProducts(page = 1) {
         </td>
         <td>${formatDate(p.createdAt)}</td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="updateProductStock('${p.id}', ${p.stock})">Sửa kho</button>
-          <button class="btn btn-sm btn-danger-outline" onclick="deleteProduct('${p.id}')">Xóa</button>
+          <button class="btn btn-sm btn-outline" data-action="stock" data-id="${escapeHtml(p.id)}" data-stock="${p.stock}">Sửa kho</button>
+          <button class="btn btn-sm btn-danger-outline" data-action="delete" data-id="${escapeHtml(p.id)}">Xóa</button>
         </td>
       </tr>
     `,
@@ -252,8 +259,9 @@ async function deleteProduct(id) {
 }
 
 async function updateProductStock(id, currentStock) {
-  const newStock = prompt('Nhập số lượng tồn kho mới:', currentStock);
-  if (newStock === null || isNaN(parseInt(newStock, 10))) return;
+  const newStock = prompt('Nhập tồn kho khả dụng mới (thay thế giá trị hiện tại):', currentStock);
+  if (newStock === null) return;
+  if (!/^\d+$/.test(newStock.trim())) { showToast('Tồn kho phải là số nguyên không âm', 'error'); return; }
   try {
     const res = await fetch(`${API_BASE}/products/${id}`, {
       method: 'PATCH',
@@ -274,13 +282,15 @@ async function loadProductOptions() {
   try {
     const res = await fetch(`${API_BASE}/products?limit=100`);
     const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Không thể tải dữ liệu');
     const select = document.getElementById('order-product-select');
 
-    select.innerHTML = '<option value="">-- Chọn sản phẩm muốn mua --</option>';
+    select.replaceChildren(new Option('-- Chọn sản phẩm muốn mua --', ''));
     (result.data || []).forEach((p) => {
-      select.innerHTML += `<option value="${p.id}" data-price="${p.price}" data-stock="${p.stock}">
-        ${p.name} (${p.sku}) - Tồn kho: ${p.stock} - ${formatVND(p.price)}
-      </option>`;
+      const option = new Option(`${p.name} (${p.sku}) - Tồn kho: ${p.stock} - ${formatVND(p.price)}`, p.id);
+      option.dataset.price = p.price;
+      option.dataset.stock = p.stock;
+      select.add(option);
     });
 
     select.onchange = () => {
@@ -293,7 +303,7 @@ async function loadProductOptions() {
       }
     };
   } catch (err) {
-    console.error(err);
+    showToast('Không thể tải dữ liệu: ' + err.message, 'error');
   }
 }
 
@@ -343,120 +353,70 @@ document.getElementById('order-form').addEventListener('submit', async (e) => {
 
 // ===================== TAB 3: CONCURRENCY SIMULATOR =====================
 async function loadConcurrencyProduct() {
-  try {
-    const res = await fetch(`${API_BASE}/products?search=LIMITED-EDITION-ITEM`);
-    const data = await res.json();
-    if (data.data && data.data.length > 0) {
-      testConcurrencyProduct = data.data[0];
-    } else {
-      // Pick first product
-      const allRes = await fetch(`${API_BASE}/products?limit=1`);
-      const allData = await allRes.json();
-      testConcurrencyProduct = allData.data[0];
-    }
-
-    if (testConcurrencyProduct) {
-      document.getElementById('race-product-name').textContent = testConcurrencyProduct.name;
-      document.getElementById('race-product-stock').textContent = testConcurrencyProduct.stock;
-    }
-  } catch (err) {
-    console.error(err);
+  if (!testConcurrencyProduct) {
+    document.getElementById('race-product-name').textContent = 'Một sản phẩm riêng sẽ được tạo khi thử nghiệm';
+    document.getElementById('race-product-stock').textContent = '-';
+    return;
   }
+  const res = await fetch(`${API_BASE}/products/${testConcurrencyProduct.id}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Không thể tải sản phẩm thử nghiệm');
+  testConcurrencyProduct = data;
+  document.getElementById('race-product-name').textContent = data.name;
+  document.getElementById('race-product-stock').textContent = data.stock;
+}
+
+async function createConcurrencyProduct() {
+  const res = await fetch(`${API_BASE}/products`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sku: `DEMO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: 'Concurrency demo', price: 500000, stock: 1 }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Không thể tạo sản phẩm thử nghiệm');
+  testConcurrencyProduct = data;
+  await loadConcurrencyProduct();
 }
 
 document.getElementById('btn-reset-test-item').addEventListener('click', async () => {
-  if (!testConcurrencyProduct) return;
-  try {
-    await fetch(`${API_BASE}/products/${testConcurrencyProduct.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stock: 1 }),
-    });
-    showToast('Đã đặt lại tồn kho = 1 đơn vị!', 'info');
-    loadConcurrencyProduct();
-  } catch (err) {
-    showToast(err.message, 'error');
-  }
+  try { await createConcurrencyProduct(); showToast('Đã tạo sản phẩm thử nghiệm mới với tồn kho = 1', 'info'); }
+  catch (err) { showToast(err.message, 'error'); }
 });
 
 document.getElementById('btn-run-race-test').addEventListener('click', async () => {
-  if (!testConcurrencyProduct) {
-    await loadConcurrencyProduct();
-  }
-
-  // Ensure stock is 1
-  await fetch(`${API_BASE}/products/${testConcurrencyProduct.id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stock: 1 }),
-  });
-  testConcurrencyProduct.stock = 1;
-  document.getElementById('race-product-stock').textContent = '1';
-
-  const container = document.getElementById('concurrency-results-container');
-  const grid = document.getElementById('concurrency-requests-grid');
-  container.style.display = 'block';
-  grid.innerHTML = '<div class="text-center" style="grid-column: 1/-1;">Đang xử lý 10 lượt đặt mua cùng lúc...</div>';
-
   const btn = document.getElementById('btn-run-race-test');
   btn.disabled = true;
   btn.textContent = '⏳ Đang xử lý 10 lượt đặt mua...';
-
-  const N = 10;
-  const startTime = Date.now();
-
-  const requests = Array.from({ length: N }).map((_, i) => {
-    const custIdx = i + 1;
-    return fetch(`${API_BASE}/orders`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerName: `Khách Hàng #${custIdx}`,
-        customerEmail: `khachhang${custIdx}@example.com`,
-        items: [{ productId: testConcurrencyProduct.id, quantity: 1 }],
-      }),
-    }).then(async (res) => {
-      const body = await res.json();
-      return { custIdx, status: res.status, body };
-    });
-  });
-
-  const results = await Promise.all(requests);
-  const elapsed = Date.now() - startTime;
-
-  btn.disabled = false;
-  btn.textContent = '🚀 Thử Nghiệm 10 Lượt Đặt Mua Cùng Lúc';
-
-  // Calculate stats
-  const successCount = results.filter((r) => r.status === 201).length;
-  const failedCount = results.filter((r) => r.status === 400).length;
-
-  document.getElementById('race-count-success').textContent = successCount;
-  document.getElementById('race-count-failed').textContent = failedCount;
-  document.getElementById('race-time-elapsed').textContent = `${elapsed}ms`;
-
-  // Render cards
-  grid.innerHTML = results
-    .map(
-      (r) => `
-    <div class="req-card ${r.status === 201 ? 'success' : 'failed'}">
-      <div><strong>Khách Hàng #${r.custIdx}</strong></div>
-      <div>Trạng Thái: <strong>${r.status === 201 ? 'Đặt Hàng Thành Công ✅' : 'Hết Hàng ❌'}</strong></div>
-      <div style="margin-top: 4px; font-size: 0.8rem; color: #475569;">
-        ${r.status === 201 ? `Mã Đơn: <code>${r.body.id.substring(0, 8)}...</code>` : 'Sản phẩm đã hết hàng, vui lòng thử lại sau.'}
-      </div>
-    </div>
-  `,
-    )
-    .join('');
-
-  // Reload current stock
-  await loadConcurrencyProduct();
-
-  if (successCount === 1 && failedCount === N - 1) {
-    showToast('🏆 Hoàn hảo! Đúng 1 khách hàng đặt thành công, các lượt mua sau nhận thông báo hết hàng. Tồn kho không bị âm!', 'success');
-  } else {
-    showToast(`Kết quả: ${successCount} thành công, ${failedCount} thông báo hết hàng.`, 'info');
+  try {
+    await createConcurrencyProduct();
+    document.getElementById('concurrency-results-container').style.display = 'block';
+    const grid = document.getElementById('concurrency-requests-grid');
+    grid.textContent = 'Đang xử lý 10 lượt đặt mua cùng lúc...';
+    const start = Date.now();
+    const results = await Promise.all(Array.from({ length: 10 }, async (_, i) => {
+      const res = await fetch(`${API_BASE}/orders`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerName: `Khách Hàng #${i + 1}`, customerEmail: `demo${i + 1}@example.com`, items: [{ productId: testConcurrencyProduct.id, quantity: 1 }] }),
+      });
+      return { index: i + 1, status: res.status, body: await res.json() };
+    }));
+    const success = results.filter(r => r.status === 201).length;
+    const rejected = results.filter(r => r.status === 400 && String(r.body.message).includes('Insufficient stock')).length;
+    document.getElementById('race-count-success').textContent = success;
+    document.getElementById('race-count-failed').textContent = rejected;
+    document.getElementById('race-time-elapsed').textContent = `${Date.now() - start}ms`;
+    grid.innerHTML = results.map(r => `
+      <div class="req-card ${r.status === 201 ? 'success' : 'failed'}">
+        <div><strong>Khách Hàng #${r.index}</strong></div>
+        <div>HTTP ${r.status}: ${r.status === 201 ? 'Đặt hàng thành công' : escapeHtml(r.body.message || 'Yêu cầu thất bại')}</div>
+      </div>`).join('');
+    await loadConcurrencyProduct();
+    const passed = success === 1 && rejected === 9 && testConcurrencyProduct.stock === 0;
+    showToast(passed ? 'Kết quả đúng: 1 đơn thành công, 9 lượt hết hàng, tồn kho = 0.' : 'Kết quả chưa đạt kỳ vọng; hãy xem lỗi từng yêu cầu.', passed ? 'success' : 'error');
+  } catch (err) {
+    showToast('Không thể hoàn thành thử nghiệm: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Thử Nghiệm 10 Lượt Đặt Mua Cùng Lúc';
   }
 });
 
@@ -471,6 +431,7 @@ async function loadOrders(page = 1) {
   try {
     const res = await fetch(url);
     const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Không thể tải dữ liệu');
     const tbody = document.getElementById('orders-table-body');
 
     if (!result.data || result.data.length === 0) {
@@ -512,21 +473,21 @@ async function loadOrders(page = 1) {
         <tr>
           <td><code title="${o.id}">${o.id.substring(0, 8)}...</code></td>
           <td>
-            <strong>${o.customerName}</strong><br>
-            <span style="font-size:0.8rem; color:#64748b;">${o.customerEmail}</span>
+            <strong>${escapeHtml(o.customerName)}</strong><br>
+            <span style="font-size:0.8rem; color:#64748b;">${escapeHtml(o.customerEmail)}</span>
           </td>
-          <td><span style="font-size:0.85rem;">${itemsDesc || '-'}</span></td>
+          <td><span style="font-size:0.85rem;">${escapeHtml(itemsDesc || '-')}</span></td>
           <td><strong>${formatVND(o.totalAmount)}</strong></td>
           <td><span class="status-badge ${statusClass}">${statusText}</span></td>
           <td>${formatDate(o.createdAt)}</td>
           <td>
             <div style="display:flex; gap:6px;">
-              <button class="btn btn-sm btn-outline" onclick="viewJobStatus('${o.id}')" title="Xem tiến trình xử lý">
+              <button class="btn btn-sm btn-outline" data-action="job" data-id="${escapeHtml(o.id)}" title="Xem tiến trình xử lý">
                 🔍 Tiến Trình
               </button>
               ${
                 canCancel
-                  ? `<button class="btn btn-sm btn-danger-outline" onclick="cancelOrder('${o.id}')" title="Hủy đơn và hoàn kho">
+                  ? `<button class="btn btn-sm btn-danger-outline" data-action="cancel" data-id="${escapeHtml(o.id)}" title="Hủy đơn và hoàn kho">
                       Hủy đơn
                     </button>`
                   : ''
@@ -553,7 +514,7 @@ async function loadOrders(page = 1) {
       badge.style.display = 'none';
     }
   } catch (err) {
-    console.error(err);
+    showToast('Không thể tải dữ liệu: ' + err.message, 'error');
   }
 }
 
@@ -577,18 +538,19 @@ async function viewJobStatus(orderId) {
   try {
     const res = await fetch(`${API_BASE}/orders/${orderId}/jobs`);
     const job = await res.json();
+    if (!res.ok) throw new Error(job.message || 'Không thể tải tiến trình');
 
     const stateDisplay =
       job.state === 'completed'
         ? '✅ ĐÃ HOÀN THÀNH'
         : job.state === 'failed'
         ? '❌ THẤT BẠI'
-        : '⏳ ĐANG XỬ LÝ';
+        : job.state === 'not_found' ? '⏳ CHỜ HỆ THỐNG TẠO TIẾN TRÌNH' : '⏳ ĐANG XỬ LÝ';
 
     content.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:12px;">
-        <div><strong>Mã Đơn Hàng:</strong> <code>${orderId}</code></div>
-        <div><strong>Mã Tiến Trình:</strong> <code>${job.jobId}</code></div>
+        <div><strong>Mã Đơn Hàng:</strong> <code>${escapeHtml(orderId)}</code></div>
+        <div><strong>Mã Tiến Trình:</strong> <code>${escapeHtml(job.jobId)}</code></div>
         <div>
           <strong>Trạng Thái Xử Lý:</strong>
           <span class="status-badge ${
@@ -603,12 +565,12 @@ async function viewJobStatus(orderId) {
         </div>
         <div>
           <strong>Lượt Thử Nghiệm Xử Lý:</strong>
-          <strong>${job.attemptsMade} / ${job.maxAttempts} lượt</strong>
+          <strong>${job.attemptsMade} / ${job.maxAttempts} lượt tối đa</strong>
         </div>
         ${
           job.failedReason
             ? `<div style="background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:6px; color:#991b1b;">
-                <strong>Ghi Chú Lỗi:</strong><br>${job.failedReason}
+                <strong>Ghi Chú Lỗi:</strong><br>${escapeHtml(job.failedReason)}
                </div>`
             : ''
         }
@@ -617,7 +579,7 @@ async function viewJobStatus(orderId) {
       </div>
     `;
   } catch (err) {
-    content.innerHTML = `<div class="text-center" style="color:var(--danger)">Lỗi khi tải thông tin: ${err.message}</div>`;
+    content.innerHTML = `<div class="text-center" style="color:var(--danger)">Lỗi khi tải thông tin: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -654,7 +616,7 @@ function setupAutoRefresh() {
     }, 3000);
   }
 
-  checkbox?.addEventListener('change', setupAutoRefresh);
+  if (checkbox) checkbox.onchange = setupAutoRefresh;
 }
 
 // ===================== TAB 5: NOTIFICATION LOGS =====================
@@ -662,6 +624,7 @@ async function loadLogs() {
   try {
     const res = await fetch(`${API_BASE}/notifications?limit=50`);
     const logs = await res.json();
+    if (!res.ok) throw new Error(logs.message || 'Không thể tải thông báo');
     const tbody = document.getElementById('logs-table-body');
 
     if (!logs || logs.length === 0) {
@@ -676,19 +639,19 @@ async function loadLogs() {
         <td>${formatDate(log.createdAt)}</td>
         <td>
           <span class="status-badge ${log.status === 'SENT' ? 'badge-confirmed' : 'badge-failed'}">
-            ${log.status}
+            ${escapeHtml(log.status)}
           </span>
         </td>
         <td><code>${log.orderId.substring(0, 8)}...</code></td>
-        <td>${log.customerEmail}</td>
-        <td><strong>${log.title}</strong></td>
-        <td style="font-size:0.85rem; color:#334155;">${log.message}</td>
+        <td>${escapeHtml(log.customerEmail)}</td>
+        <td><strong>${escapeHtml(log.title)}</strong></td>
+        <td style="font-size:0.85rem; color:#334155;">${escapeHtml(log.message)}</td>
       </tr>
     `,
       )
       .join('');
   } catch (err) {
-    console.error(err);
+    showToast('Không thể tải dữ liệu: ' + err.message, 'error');
   }
 }
 
@@ -698,4 +661,17 @@ window.addEventListener('DOMContentLoaded', () => {
   loadOrders();
   loadConcurrencyProduct();
   setupAutoRefresh();
+});
+
+document.getElementById('products-table-body').addEventListener('click', event => {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  if (button.dataset.action === 'stock') updateProductStock(button.dataset.id, button.dataset.stock);
+  if (button.dataset.action === 'delete') deleteProduct(button.dataset.id);
+});
+document.getElementById('orders-table-body').addEventListener('click', event => {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  if (button.dataset.action === 'job') viewJobStatus(button.dataset.id);
+  if (button.dataset.action === 'cancel') cancelOrder(button.dataset.id);
 });

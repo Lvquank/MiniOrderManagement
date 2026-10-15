@@ -1,6 +1,10 @@
 # Compiled output
 /dist
 /build
+/coverage
+/tmp
+/output
+.vercel
 
 # Node modules
 /node_modules

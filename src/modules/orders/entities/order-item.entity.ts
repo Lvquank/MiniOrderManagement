@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -12,15 +13,19 @@ import { ColumnNumericTransformer } from '../../../../src/common/utils/numeric.t
 @Entity('order_items')
 export class OrderItem {
   @PrimaryGeneratedColumn('uuid')
+  @ApiProperty({ format: 'uuid' })
   id: string;
 
   @Column({ type: 'uuid' })
+  @ApiProperty({ format: 'uuid' })
   orderId: string;
 
   @Column({ type: 'uuid' })
+  @ApiProperty({ format: 'uuid' })
   productId: string;
 
   @Column({ type: 'int' })
+  @ApiProperty({})
   quantity: number;
 
   @Column({
@@ -29,6 +34,7 @@ export class OrderItem {
     scale: 2,
     transformer: new ColumnNumericTransformer(),
   })
+  @ApiProperty({})
   unitPrice: number;
 
   @ManyToOne(() => Order, (order) => order.items, { onDelete: 'CASCADE' })
@@ -37,5 +43,6 @@ export class OrderItem {
 
   @ManyToOne(() => Product, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'productId' })
+  @ApiProperty({ type: () => Product, nullable: true })
   product: Product;
 }

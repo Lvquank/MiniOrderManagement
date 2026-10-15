@@ -7,7 +7,7 @@ import { NotificationLog } from '../modules/notifications/entities/notification-
 
 dotenv.config();
 
-const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+const dbUrl = process.env.DATABASE_URL || process.env.DATABASE_URL_UNPOOLED;
 
 export const dataSourceOptions: DataSourceOptions = dbUrl
   ? {
@@ -34,5 +34,8 @@ export const dataSourceOptions: DataSourceOptions = dbUrl
       logging: process.env.NODE_ENV === 'development',
     };
 
-const AppDataSource = new DataSource(dataSourceOptions);
+const AppDataSource = new DataSource({
+  ...dataSourceOptions,
+  ...(process.env.DATABASE_URL_UNPOOLED ? { url: process.env.DATABASE_URL_UNPOOLED } : {}),
+});
 export default AppDataSource;
