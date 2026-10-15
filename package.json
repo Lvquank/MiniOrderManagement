@@ -21,7 +21,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:ui": "node --test test/product-filter.test.cjs",
+    "test:ui": "node --test test/product-filter.test.cjs test/cart.test.cjs",
     "test:concurrency": "ts-node -r tsconfig-paths/register scripts/test-concurrency.ts",
     "test:integration": "jest --config test/jest-integration.json --runInBand"
   },
