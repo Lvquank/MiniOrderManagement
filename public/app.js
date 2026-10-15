@@ -7,6 +7,8 @@ let products = [];
 let testConcurrencyProduct = null;
 let currentOrderStatusFilter = '';
 let autoRefreshTimer = null;
+let currentProductsPage = 1;
+let currentOrdersPage = 1;
 
 // Helpers
 function formatVND(amount) {
@@ -30,6 +32,83 @@ function showToast(message, type = 'info') {
   }, 4000);
 }
 
+// Reusable Pagination Renderer
+function renderPagination(containerId, { page, totalPages, total, limit }, callbackName) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!total || total === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const start = (page - 1) * limit + 1;
+  const end = Math.min(page * limit, total);
+
+  if (totalPages <= 1) {
+    container.innerHTML = `
+      <div class="pagination-info">Hiển thị toàn bộ <strong>${total}</strong> mục</div>
+      <div class="pagination-controls"></div>
+    `;
+    return;
+  }
+
+  let buttonsHtml = '';
+
+  // Previous button
+  buttonsHtml += `
+    <button class="page-btn" ${page <= 1 ? 'disabled' : ''} onclick="${callbackName}(${page - 1})" title="Trang trước">
+      ‹ Trước
+    </button>
+  `;
+
+  // Numbered pages (max 5 visible buttons)
+  const maxButtons = 5;
+  let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage + 1 < maxButtons) {
+    startPage = Math.max(1, endPage - maxButtons + 1);
+  }
+
+  if (startPage > 1) {
+    buttonsHtml += `<button class="page-btn" onclick="${callbackName}(1)">1</button>`;
+    if (startPage > 2) {
+      buttonsHtml += `<span class="page-ellipsis">...</span>`;
+    }
+  }
+
+  for (let p = startPage; p <= endPage; p++) {
+    buttonsHtml += `
+      <button class="page-btn ${p === page ? 'active' : ''}" onclick="${callbackName}(${p})">
+        ${p}
+      </button>
+    `;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      buttonsHtml += `<span class="page-ellipsis">...</span>`;
+    }
+    buttonsHtml += `<button class="page-btn" onclick="${callbackName}(${totalPages})">${totalPages}</button>`;
+  }
+
+  // Next button
+  buttonsHtml += `
+    <button class="page-btn" ${page >= totalPages ? 'disabled' : ''} onclick="${callbackName}(${page + 1})" title="Trang sau">
+      Sau ›
+    </button>
+  `;
+
+  container.innerHTML = `
+    <div class="pagination-info">
+      Hiển thị <strong>${start} - ${end}</strong> trên tổng số <strong>${total}</strong> mục (Trang <strong>${page}</strong> / <strong>${totalPages}</strong>)
+    </div>
+    <div class="pagination-controls">
+      ${buttonsHtml}
+    </div>
+  `;
+}
+
 // Tabs Navigation
 document.querySelectorAll('.tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -40,10 +119,10 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
     const targetPaneId = btn.getAttribute('data-tab');
     document.getElementById(targetPaneId).classList.add('active');
 
-    if (targetPaneId === 'tab-products') loadProducts();
+    if (targetPaneId === 'tab-products') loadProducts(1);
     if (targetPaneId === 'tab-order-create') loadProductOptions();
     if (targetPaneId === 'tab-concurrency') loadConcurrencyProduct();
-    if (targetPaneId === 'tab-orders') loadOrders();
+    if (targetPaneId === 'tab-orders') loadOrders(1);
     if (targetPaneId === 'tab-logs') loadLogs();
   });
 });
@@ -58,8 +137,8 @@ document.querySelectorAll('[data-close]').forEach((btn) => {
 
 // Refresh button
 document.getElementById('btn-refresh').addEventListener('click', () => {
-  loadProducts();
-  loadOrders();
+  loadProducts(currentProductsPage);
+  loadOrders(currentOrdersPage);
   loadLogs();
   loadConcurrencyProduct();
   showToast('Đã làm mới dữ liệu!', 'info');
@@ -67,6 +146,7 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 
 // ===================== TAB 1: PRODUCTS =====================
 async function loadProducts(page = 1) {
+  currentProductsPage = page;
   const search = document.getElementById('search-product').value;
   const minPrice = document.getElementById('filter-min-price').value;
   const maxPrice = document.getElementById('filter-max-price').value;
@@ -83,6 +163,7 @@ async function loadProducts(page = 1) {
 
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" class="text-center">Không tìm thấy sản phẩm nào.</td></tr>';
+      renderPagination('products-pagination', { page: 1, totalPages: 0, total: 0, limit: 10 }, 'loadProducts');
       return;
     }
 
@@ -107,6 +188,13 @@ async function loadProducts(page = 1) {
     `,
       )
       .join('');
+
+    renderPagination('products-pagination', {
+      page: result.page || page,
+      totalPages: result.totalPages || 1,
+      total: result.total !== undefined ? result.total : result.data.length,
+      limit: result.limit || 10,
+    }, 'loadProducts');
   } catch (err) {
     showToast('Lỗi khi tải danh sách sản phẩm: ' + err.message, 'error');
   }
@@ -372,9 +460,10 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
   }
 });
 
-// ===================== TAB 4: ORDERS & BULLMQ =====================
-async function loadOrders() {
-  let url = `${API_BASE}/orders?limit=20`;
+// ===================== TAB 4: ORDERS =====================
+async function loadOrders(page = 1) {
+  currentOrdersPage = page;
+  let url = `${API_BASE}/orders?page=${page}&limit=10`;
   if (currentOrderStatusFilter) {
     url += `&status=${currentOrderStatusFilter}`;
   }
@@ -386,6 +475,7 @@ async function loadOrders() {
 
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center">Chưa có đơn hàng nào.</td></tr>';
+      renderPagination('orders-pagination', { page: 1, totalPages: 0, total: 0, limit: 10 }, 'loadOrders');
       return;
     }
 
@@ -448,6 +538,13 @@ async function loadOrders() {
       })
       .join('');
 
+    renderPagination('orders-pagination', {
+      page: result.page || page,
+      totalPages: result.totalPages || 1,
+      total: result.total !== undefined ? result.total : result.data.length,
+      limit: result.limit || 10,
+    }, 'loadOrders');
+
     const badge = document.getElementById('pending-count-badge');
     if (pendingCount > 0) {
       badge.textContent = pendingCount;
@@ -466,7 +563,7 @@ document.querySelectorAll('.status-filter-btn').forEach((btn) => {
     document.querySelectorAll('.status-filter-btn').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     currentOrderStatusFilter = btn.getAttribute('data-status');
-    loadOrders();
+    loadOrders(1);
   });
 });
 
@@ -536,8 +633,8 @@ async function cancelOrder(orderId) {
     if (!res.ok) throw new Error(data.message || 'Lỗi khi hủy đơn hàng');
 
     showToast(data.message, 'success');
-    loadOrders();
-    loadProducts();
+    loadOrders(currentOrdersPage);
+    loadProducts(currentProductsPage);
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -552,7 +649,7 @@ function setupAutoRefresh() {
     autoRefreshTimer = setInterval(() => {
       const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
       if (activeTab === 'tab-orders') {
-        loadOrders();
+        loadOrders(currentOrdersPage);
       }
     }, 3000);
   }
