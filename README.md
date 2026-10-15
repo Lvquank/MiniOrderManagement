@@ -152,36 +152,3 @@ Các ca quan trọng: 10 request mua stock=1; PATCH đổi tên xen kẽ checkou
 
 `npm run test:concurrency` là kiểm tra 10 request song song trên API đang chạy, không phải benchmark tải lớn. Có thể đặt `BASE_URL` để đổi target. Script tạo sản phẩm thử nghiệm riêng. Không suy ra coverage hay độ bền toàn hệ thống chỉ từ số test pass. CI chạy build, unit test, kiểm tra logic dashboard và integration test với Postgres/Redis services.
 
-## Deploy API và worker riêng
-
-### API trên Vercel
-
-Vercel hỗ trợ nhận diện NestJS tại `src/main.ts` theo [tài liệu chính thức](https://vercel.com/docs/frameworks/backend/nestjs). `vercel.json` dùng framework `nestjs`, không trỏ vào file dist chưa tồn tại khi upload.
-
-1. Import repository vào tài khoản Vercel, chọn NestJS.
-2. Cấu hình DATABASE_URL, DATABASE_URL_UNPOOLED nếu cần, REDIS_URL hoặc Redis host/password/TLS, QUEUE_PREFIX giống worker. Worker tự tắt khi `VERCEL=1`; có thể đặt thêm WORKER_ENABLED=false để làm rõ vai trò.
-3. Chạy migration bằng kết nối trực tiếp từ môi trường tin cậy trước deploy. Không chạy migration trong mỗi HTTP request/cold start.
-4. Deploy và kiểm tra `/api/docs`, `/products`, tạo đơn và theo dõi `/orders/:id/jobs` cho đến terminal state.
-5. Dùng link Vercel đã kiểm chứng làm link API nộp bài. Link Render hiện có không thay thế điều kiện này.
-
-### Worker trên Render/Railway/Fly/VPS
-
-Chạy một service/tiến trình dài hạn với cùng code và cùng Postgres/Redis/prefix:
-
-- Build: `npm ci && npm run build`.
-- Start: `npm run start:worker`.
-- Environment: `WORKER_ENABLED=true`, không đặt `VERCEL=1`, cùng biến DB/Redis/prefix với API.
-- Với Dockerfile hiện tại, dùng start command `node dist/src/worker` cho worker; default command chạy HTTP app.
-- Worker dùng application context, không mở cổng HTTP. Nếu dùng Render, chọn loại service hỗ trợ worker dài hạn và tự kiểm tra điều kiện gói dịch vụ trước khi tạo.
-
-Nếu chạy HTTP API riêng trên Render, đặt WORKER_ENABLED=false và start bằng `npm run start:prod`. Local vẫn có thể chạy API + worker cùng tiến trình để demo.
-
-Lý do tách: API trên serverless chỉ xử lý request; consumer, đối soát 5 giây và repeatable cleanup cần tiến trình luôn hoạt động. Tham khảo [BullMQ connections](https://docs.bullmq.io/guide/connections) và [retry](https://docs.bullmq.io/guide/retrying-failing-jobs).
-
-## Giới hạn và phần chưa xác nhận
-
-- Chưa xác nhận deployment Vercel và worker riêng trên tài khoản hosting từ môi trường sửa code này. Cần deploy, chạy migration mới và kiểm tra lại live trước nộp.
-- Chưa load-test quy mô lớn, chưa đo p95/p99, chưa chứng minh mọi interleaving hoặc distributed failure.
-- Chưa có authentication, payment thật, email thật; đây là scope bài tập. Demo public chỉ dùng dữ liệu giả.
-- Giữ completed/failed jobs để hỗ trợ tra cứu và phục hồi; cần retention policy có đối soát nếu vận hành lâu dài.
-- Mức lỗi ngẫu nhiên là cấu hình; các test ép 0/1 xác minh nhánh xử lý, không phải phép đo thống kê rằng lỗi production luôn đúng 30%.
