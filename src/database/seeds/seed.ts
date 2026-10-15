@@ -38,6 +38,48 @@ async function seed() {
       price: 1990000,
       stock: 1, // Only 1 in stock to test concurrency / overselling!
     },
+    {
+      sku: 'IPAD-PRO-M4',
+      name: 'iPad Pro 11 inch M4 Wi-Fi 256GB Space Black',
+      price: 28990000,
+      stock: 8,
+    },
+    {
+      sku: 'APPLE-WATCH-U2',
+      name: 'Apple Watch Ultra 2 GPS + Cellular 49mm Titanium',
+      price: 21990000,
+      stock: 12,
+    },
+    {
+      sku: 'SONY-WH1000XM5',
+      name: 'Tai nghe chống ồn không dây Sony WH-1000XM5 Silver',
+      price: 8490000,
+      stock: 18,
+    },
+    {
+      sku: 'DELL-XPS-15',
+      name: 'Laptop Dell XPS 15 9530 Core i7-13700H 16GB 512GB RTX 4050',
+      price: 45990000,
+      stock: 6,
+    },
+    {
+      sku: 'LOGITECH-MX-3S',
+      name: 'Chuột công thái học không dây Logitech MX Master 3S Graphite',
+      price: 2490000,
+      stock: 30,
+    },
+    {
+      sku: 'KEYCHRON-Q1-PRO',
+      name: 'Bàn phím cơ không dây Keychron Q1 Pro QMK/VIA Carbon Black',
+      price: 4290000,
+      stock: 14,
+    },
+    {
+      sku: 'SAMSUNG-S24-ULTRA',
+      name: 'Samsung Galaxy S24 Ultra 12GB/256GB Titanium Gray',
+      price: 27990000,
+      stock: 15,
+    },
   ];
 
   for (const item of initialProducts) {

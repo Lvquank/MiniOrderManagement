@@ -305,6 +305,37 @@ body {
   color: var(--text-muted);
 }
 
+.pagination-limit-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.pagination-limit-wrap label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pagination-limit-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.pagination-limit-select:focus {
+  border-color: var(--primary);
+}
+
 .pagination-controls {
   display: flex;
   align-items: center;

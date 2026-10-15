@@ -3,12 +3,14 @@
 const API_BASE = '';
 
 // State
-let products = [];
-let testConcurrencyProduct = null;
-let currentOrderStatusFilter = '';
-let autoRefreshTimer = null;
-let currentProductsPage = 1;
-let currentOrdersPage = 1;
+var products = [];
+var testConcurrencyProduct = null;
+var currentOrderStatusFilter = '';
+var autoRefreshTimer = null;
+var currentProductsPage = 1;
+var currentOrdersPage = 1;
+var currentProductsLimit = 10;
+var currentOrdersLimit = 10;
 
 // Helpers
 function escapeHtml(value) {
@@ -44,40 +46,37 @@ function renderPagination(containerId, { page, totalPages, total, limit }, callb
   if (!container) return;
 
   if (!total || total === 0) {
-    container.innerHTML = '';
+    container.innerHTML = `
+      <div class="pagination-info" style="color: #94a3b8;">Không có dữ liệu để hiển thị.</div>
+    `;
     return;
   }
 
-  const start = (page - 1) * limit + 1;
-  const end = Math.min(page * limit, total);
+  const safePage = Math.max(1, page || 1);
+  const safeTotalPages = Math.max(1, totalPages || 1);
+  const safeLimit = Math.max(1, limit || 10);
+  const start = (safePage - 1) * safeLimit + 1;
+  const end = Math.min(safePage * safeLimit, total);
 
-  if (totalPages <= 1) {
-    container.innerHTML = `
-      <div class="pagination-info">Hiển thị toàn bộ <strong>${total}</strong> mục</div>
-      <div class="pagination-controls"></div>
-    `;
-    return;
+  // Numbered pages (max 5 visible buttons)
+  const maxButtons = 5;
+  let startPage = Math.max(1, safePage - Math.floor(maxButtons / 2));
+  let endPage = Math.min(safeTotalPages, startPage + maxButtons - 1);
+  if (endPage - startPage + 1 < maxButtons) {
+    startPage = Math.max(1, endPage - maxButtons + 1);
   }
 
   let buttonsHtml = '';
 
   // Previous button
   buttonsHtml += `
-    <button class="page-btn" ${page <= 1 ? 'disabled' : ''} onclick="${callbackName}(${page - 1})" title="Trang trước">
+    <button type="button" class="page-btn" ${safePage <= 1 ? 'disabled' : ''} onclick="${callbackName}(${safePage - 1})" data-page="${safePage - 1}" title="Trang trước">
       ‹ Trước
     </button>
   `;
 
-  // Numbered pages (max 5 visible buttons)
-  const maxButtons = 5;
-  let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
-  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-  if (endPage - startPage + 1 < maxButtons) {
-    startPage = Math.max(1, endPage - maxButtons + 1);
-  }
-
   if (startPage > 1) {
-    buttonsHtml += `<button class="page-btn" onclick="${callbackName}(1)">1</button>`;
+    buttonsHtml += `<button type="button" class="page-btn" onclick="${callbackName}(1)" data-page="1">1</button>`;
     if (startPage > 2) {
       buttonsHtml += `<span class="page-ellipsis">...</span>`;
     }
@@ -85,34 +84,57 @@ function renderPagination(containerId, { page, totalPages, total, limit }, callb
 
   for (let p = startPage; p <= endPage; p++) {
     buttonsHtml += `
-      <button class="page-btn ${p === page ? 'active' : ''}" onclick="${callbackName}(${p})">
+      <button type="button" class="page-btn ${p === safePage ? 'active' : ''}" ${p === safePage ? 'disabled' : ''} onclick="${callbackName}(${p})" data-page="${p}">
         ${p}
       </button>
     `;
   }
 
-  if (endPage < totalPages) {
-    if (endPage < totalPages - 1) {
+  if (endPage < safeTotalPages) {
+    if (endPage < safeTotalPages - 1) {
       buttonsHtml += `<span class="page-ellipsis">...</span>`;
     }
-    buttonsHtml += `<button class="page-btn" onclick="${callbackName}(${totalPages})">${totalPages}</button>`;
+    buttonsHtml += `<button type="button" class="page-btn" onclick="${callbackName}(${safeTotalPages})" data-page="${safeTotalPages}">${safeTotalPages}</button>`;
   }
 
   // Next button
   buttonsHtml += `
-    <button class="page-btn" ${page >= totalPages ? 'disabled' : ''} onclick="${callbackName}(${page + 1})" title="Trang sau">
+    <button type="button" class="page-btn" ${safePage >= safeTotalPages ? 'disabled' : ''} onclick="${callbackName}(${safePage + 1})" data-page="${safePage + 1}" title="Trang sau">
       Sau ›
     </button>
   `;
 
+  const limitHandlerName = callbackName === 'loadProducts' ? 'changeProductsLimit' : 'changeOrdersLimit';
+
   container.innerHTML = `
     <div class="pagination-info">
-      Hiển thị <strong>${start} - ${end}</strong> trên tổng số <strong>${total}</strong> mục (Trang <strong>${page}</strong> / <strong>${totalPages}</strong>)
+      Hiển thị <strong>${start} - ${end}</strong> trên tổng số <strong>${total}</strong> mục (Trang <strong>${safePage}</strong> / <strong>${safeTotalPages}</strong>)
+    </div>
+    <div class="pagination-limit-wrap">
+      <label for="${containerId}-limit-select">Hiển thị:</label>
+      <select id="${containerId}-limit-select" class="pagination-limit-select" onchange="${limitHandlerName}(Number(this.value))" data-limit-for="${callbackName}">
+        <option value="5" ${safeLimit === 5 ? 'selected' : ''}>5 mục/trang</option>
+        <option value="10" ${safeLimit === 10 ? 'selected' : ''}>10 mục/trang</option>
+        <option value="20" ${safeLimit === 20 ? 'selected' : ''}>20 mục/trang</option>
+        <option value="50" ${safeLimit === 50 ? 'selected' : ''}>50 mục/trang</option>
+      </select>
     </div>
     <div class="pagination-controls">
       ${buttonsHtml}
     </div>
   `;
+}
+
+function changeProductsLimit(newLimit) {
+  if (!newLimit || newLimit <= 0) return;
+  currentProductsLimit = newLimit;
+  loadProducts(1);
+}
+
+function changeOrdersLimit(newLimit) {
+  if (!newLimit || newLimit <= 0) return;
+  currentOrdersLimit = newLimit;
+  loadOrders(1);
 }
 
 // Tabs Navigation
@@ -202,7 +224,8 @@ async function loadProducts(page = 1) {
     return;
   }
 
-  const params = new URLSearchParams({ page, limit: 10 });
+  const activeLimit = typeof currentProductsLimit !== 'undefined' ? currentProductsLimit : 10;
+  const params = new URLSearchParams({ page, limit: activeLimit });
   for (const [name, value] of Object.entries(filters)) {
     if (value !== '') params.set(name, value);
   }
@@ -222,7 +245,7 @@ async function loadProducts(page = 1) {
 
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" class="text-center">Không tìm thấy sản phẩm phù hợp. Hãy đổi điều kiện hoặc chọn Đặt lại.</td></tr>';
-      renderPagination('products-pagination', { page: 1, totalPages: 0, total: 0, limit: 10 }, 'loadProducts');
+      renderPagination('products-pagination', { page: 1, totalPages: 0, total: 0, limit: activeLimit }, 'loadProducts');
       return;
     }
 
@@ -252,7 +275,7 @@ async function loadProducts(page = 1) {
       page: result.page || page,
       totalPages: result.totalPages || 1,
       total: result.total !== undefined ? result.total : result.data.length,
-      limit: result.limit || 10,
+      limit: result.limit || activeLimit,
     }, 'loadProducts');
   } catch {
     if (requestId !== productsRequestId) return;
@@ -700,7 +723,8 @@ document.getElementById('btn-run-race-test').addEventListener('click', async () 
 // ===================== TAB 4: ORDERS =====================
 async function loadOrders(page = 1) {
   currentOrdersPage = page;
-  let url = `${API_BASE}/orders?page=${page}&limit=10`;
+  const activeLimit = typeof currentOrdersLimit !== 'undefined' ? currentOrdersLimit : 10;
+  let url = `${API_BASE}/orders?page=${page}&limit=${activeLimit}`;
   if (currentOrderStatusFilter) {
     url += `&status=${currentOrderStatusFilter}`;
   }
@@ -713,7 +737,7 @@ async function loadOrders(page = 1) {
 
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center">Chưa có đơn hàng nào.</td></tr>';
-      renderPagination('orders-pagination', { page: 1, totalPages: 0, total: 0, limit: 10 }, 'loadOrders');
+      renderPagination('orders-pagination', { page: 1, totalPages: 0, total: 0, limit: activeLimit }, 'loadOrders');
       return;
     }
 
@@ -780,7 +804,7 @@ async function loadOrders(page = 1) {
       page: result.page || page,
       totalPages: result.totalPages || 1,
       total: result.total !== undefined ? result.total : result.data.length,
-      limit: result.limit || 10,
+      limit: result.limit || activeLimit,
     }, 'loadOrders');
 
     const badge = document.getElementById('pending-count-badge');
@@ -933,22 +957,64 @@ async function loadLogs() {
 }
 
 // Initialize on page load
-window.addEventListener('DOMContentLoaded', () => {
-  loadProducts();
-  loadOrders();
-  loadConcurrencyProduct();
-  setupAutoRefresh();
-});
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('DOMContentLoaded', () => {
+    loadProducts();
+    loadOrders();
+    loadConcurrencyProduct();
+    setupAutoRefresh();
+  });
+}
 
-document.getElementById('products-table-body').addEventListener('click', event => {
+document.getElementById('products-table-body')?.addEventListener('click', event => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
   if (button.dataset.action === 'stock') updateProductStock(button.dataset.id, button.dataset.stock);
   if (button.dataset.action === 'delete') deleteProduct(button.dataset.id);
 });
-document.getElementById('orders-table-body').addEventListener('click', event => {
+document.getElementById('orders-table-body')?.addEventListener('click', event => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
   if (button.dataset.action === 'job') viewJobStatus(button.dataset.id);
   if (button.dataset.action === 'cancel') cancelOrder(button.dataset.id);
 });
+
+if (typeof window !== 'undefined') {
+  window.loadProducts = loadProducts;
+  window.loadOrders = loadOrders;
+  window.changeProductsLimit = changeProductsLimit;
+  window.changeOrdersLimit = changeOrdersLimit;
+  window.renderPagination = renderPagination;
+}
+
+// Delegated pagination interactions
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('click', (event) => {
+    const pageBtn = event.target?.closest?.('.page-btn[data-page]');
+    if (!pageBtn || pageBtn.disabled) return;
+    const targetPage = Number(pageBtn.dataset.page);
+    if (!targetPage || targetPage < 1) return;
+
+    const container = pageBtn.closest('.pagination-footer');
+    if (!container) return;
+    if (container.id === 'products-pagination') {
+      loadProducts(targetPage);
+    } else if (container.id === 'orders-pagination') {
+      loadOrders(targetPage);
+    }
+  });
+
+  document.addEventListener('change', (event) => {
+    const select = event.target?.closest?.('.pagination-limit-select');
+    if (!select) return;
+    const newLimit = Number(select.value);
+    if (!newLimit || newLimit < 1) return;
+
+    const limitFor = select.dataset.limitFor;
+    if (limitFor === 'loadProducts') {
+      changeProductsLimit(newLimit);
+    } else if (limitFor === 'loadOrders') {
+      changeOrdersLimit(newLimit);
+    }
+  });
+}
