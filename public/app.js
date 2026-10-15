@@ -144,6 +144,7 @@ document.querySelectorAll('[data-close]').forEach((btn) => {
 // Refresh button
 document.getElementById('btn-refresh').addEventListener('click', () => {
   loadProducts(currentProductsPage);
+  loadProductOptions();
   loadOrders(currentOrdersPage);
   loadLogs();
   loadConcurrencyProduct();
@@ -504,6 +505,7 @@ document.getElementById('btn-submit-order')?.addEventListener('click', async () 
     orderCart = [];
     renderCart();
     loadProductOptions();
+    loadProducts(currentProductsPage);
 
     // Switch to orders tab
     setTimeout(() => {
