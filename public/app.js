@@ -151,25 +151,76 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 });
 
 // ===================== TAB 1: PRODUCTS =====================
-async function loadProducts(page = 1) {
-  currentProductsPage = page;
-  const search = document.getElementById('search-product').value;
-  const minPrice = document.getElementById('filter-min-price').value;
-  const maxPrice = document.getElementById('filter-max-price').value;
+let productsRequestId = 0;
 
-  let url = `${API_BASE}/products?page=${page}&limit=10`;
-  if (search) url += `&search=${encodeURIComponent(search)}`;
-  if (minPrice) url += `&minPrice=${minPrice}`;
-  if (maxPrice) url += `&maxPrice=${maxPrice}`;
+function readProductFilters() {
+  const min = document.getElementById('filter-min-price');
+  const max = document.getElementById('filter-max-price');
+  let firstInvalid = null;
+
+  for (const input of [min, max]) {
+    const error = document.getElementById(`${input.id}-error`);
+    let message = '';
+    if (input.validity.badInput || (input.value !== '' && !Number.isFinite(input.valueAsNumber))) {
+      message = 'Vui lòng nhập một mức giá hợp lệ.';
+    } else if (input.value !== '' && input.valueAsNumber < 0) {
+      message = 'Giá phải lớn hơn hoặc bằng 0.';
+    } else if (input === max && !firstInvalid && min.value !== '' && max.value !== '' && min.valueAsNumber > max.valueAsNumber) {
+      message = 'Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu.';
+    }
+    error.textContent = message;
+    error.hidden = !message;
+    input.setAttribute('aria-invalid', String(Boolean(message)));
+    if (message && !firstInvalid) firstInvalid = input;
+  }
+
+  if (firstInvalid) {
+    firstInvalid.focus();
+    return null;
+  }
+
+  return {
+    search: document.getElementById('search-product').value.trim(),
+    minPrice: min.value,
+    maxPrice: max.value,
+  };
+}
+
+async function loadProducts(page = 1) {
+  const requestId = ++productsRequestId;
+  const filters = readProductFilters();
+  const status = document.getElementById('product-filter-status');
+  const button = document.getElementById('btn-filter-products');
+  const results = document.getElementById('products-results');
+  status.classList.toggle('filter-status-error', !filters);
+  if (!filters) {
+    status.textContent = 'Chưa áp dụng bộ lọc. Vui lòng sửa mức giá được đánh dấu.';
+    button.disabled = false;
+    button.textContent = 'Lọc sản phẩm';
+    results.setAttribute('aria-busy', 'false');
+    return;
+  }
+
+  const params = new URLSearchParams({ page, limit: 10 });
+  for (const [name, value] of Object.entries(filters)) {
+    if (value !== '') params.set(name, value);
+  }
+  button.disabled = true;
+  button.textContent = 'Đang lọc…';
+  status.textContent = 'Đang tải danh sách sản phẩm…';
+  results.setAttribute('aria-busy', 'true');
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(`${API_BASE}/products?${params}`);
     const result = await res.json();
+    if (requestId !== productsRequestId) return;
     if (!res.ok) throw new Error(result.message || 'Không thể tải dữ liệu');
+    currentProductsPage = page;
     const tbody = document.getElementById('products-table-body');
+    status.textContent = `Tìm thấy ${result.total} sản phẩm theo điều kiện đã gửi.`;
 
     if (!result.data || result.data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Không tìm thấy sản phẩm nào.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Không tìm thấy sản phẩm phù hợp. Hãy đổi điều kiện hoặc chọn Đặt lại.</td></tr>';
       renderPagination('products-pagination', { page: 1, totalPages: 0, total: 0, limit: 10 }, 'loadProducts');
       return;
     }
@@ -202,16 +253,27 @@ async function loadProducts(page = 1) {
       total: result.total !== undefined ? result.total : result.data.length,
       limit: result.limit || 10,
     }, 'loadProducts');
-  } catch (err) {
-    showToast('Lỗi khi tải danh sách sản phẩm: ' + err.message, 'error');
+  } catch {
+    if (requestId !== productsRequestId) return;
+    status.classList.add('filter-status-error');
+    status.textContent = 'Không thể tải danh sách sản phẩm. Vui lòng chọn Lọc sản phẩm để thử lại.';
+    document.getElementById('products-table-body').innerHTML = '<tr><td colspan="6" class="text-center">Chưa tải được kết quả. Vui lòng thử lại.</td></tr>';
+    document.getElementById('products-pagination').innerHTML = '';
+  } finally {
+    if (requestId === productsRequestId) {
+      button.disabled = false;
+      button.textContent = 'Lọc sản phẩm';
+      results.setAttribute('aria-busy', 'false');
+    }
   }
 }
 
-document.getElementById('btn-filter-products').addEventListener('click', () => loadProducts(1));
+document.getElementById('product-filter-form').addEventListener('submit', event => {
+  event.preventDefault();
+  loadProducts(1);
+});
 document.getElementById('btn-reset-filter-products').addEventListener('click', () => {
-  document.getElementById('search-product').value = '';
-  document.getElementById('filter-min-price').value = '';
-  document.getElementById('filter-max-price').value = '';
+  document.getElementById('product-filter-form').reset();
   loadProducts(1);
 });
 

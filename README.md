@@ -62,7 +62,7 @@ src/database/migrations/       Schema và CHECK constraints
 src/main.ts                    HTTP API và dashboard
 src/worker.ts                  Worker độc lập, không mở cổng HTTP
 public/                        Dashboard HTML/CSS/JS
-test/                          Integration test PostgreSQL + Redis
+test/                          Integration test PostgreSQL + Redis, regression dashboard
 ```
 
 | Bảng | Dữ liệu và ràng buộc chính |
@@ -122,11 +122,14 @@ Lỗi đồng nhất: `{statusCode,message,error,timestamp,path}`. Input không 
 
 Dashboard escape nội dung người dùng trước khi render; option sản phẩm tạo bằng DOM. Simulator luôn tạo sản phẩm riêng, không reset kho của sản phẩm có sẵn; lỗi request được hiển thị và nút được mở lại.
 
+Bộ lọc sản phẩm hỗ trợ Enter, nhãn trường luôn hiển thị, giá không âm và kiểm tra giá tối thiểu không vượt giá tối đa ở cả dashboard lẫn API. Có thể bỏ trống từng cận hoặc nhập 0; giá lẻ được hỗ trợ. Dashboard hiển thị lỗi tại trường, trạng thái tải và số kết quả; phản hồi của request cũ không ghi đè request mới.
+
 ## Kiểm thử
 
 ```sh
 npm test -- --runInBand
 npm run test:cov -- --runInBand
+npm run test:ui
 ```
 
 Integration test cần PostgreSQL và Redis thật, dùng schema/prefix tự sinh rồi dọn sau khi chạy. Không chạy migration/xóa dữ liệu trên schema public của ứng dụng.
@@ -145,7 +148,9 @@ npm run test:integration
 
 Các ca quan trọng: 10 request mua stock=1; PATCH đổi tên xen kẽ checkout; rollback nhiều item; lưu giá; cancel đồng thời; SKU trùng đồng thời; 400 cho null/overflow/precision; enqueue lỗi rồi phục hồi; hết 3 attempts, lỗi DB lúc hoàn kho rồi phục hồi sau restart; duplicate job/refund; hủy trước worker; cleanup; migration constraints và Swagger schema.
 
-`npm run test:concurrency` là kiểm tra 10 request song song trên API đang chạy, không phải benchmark tải lớn. Có thể đặt `BASE_URL` để đổi target. Script tạo sản phẩm thử nghiệm riêng. Không suy ra coverage hay độ bền toàn hệ thống chỉ từ số test pass. CI chạy build, unit test và integration test với Postgres/Redis services.
+`npm run test:ui` dùng Node.js test runner, không cần database; kiểm tra logic validation, submit/reset, lỗi HTTP/network và các request lọc chồng nhau. Kiểm tra này không thay thế kiểm thử bố cục và thao tác trong trình duyệt.
+
+`npm run test:concurrency` là kiểm tra 10 request song song trên API đang chạy, không phải benchmark tải lớn. Có thể đặt `BASE_URL` để đổi target. Script tạo sản phẩm thử nghiệm riêng. Không suy ra coverage hay độ bền toàn hệ thống chỉ từ số test pass. CI chạy build, unit test, kiểm tra logic dashboard và integration test với Postgres/Redis services.
 
 ## Deploy API và worker riêng
 

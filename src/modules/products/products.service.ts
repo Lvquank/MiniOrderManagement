@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
@@ -36,6 +37,10 @@ export class ProductsService {
 
   async findAll(query: QueryProductDto): Promise<PaginatedResult<Product>> {
     const { page = 1, limit = 10, search, minPrice, maxPrice, skip } = query;
+
+    if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) {
+      throw new BadRequestException('Minimum price must not exceed maximum price');
+    }
 
     const qb: SelectQueryBuilder<Product> = this.productRepository
       .createQueryBuilder('product')

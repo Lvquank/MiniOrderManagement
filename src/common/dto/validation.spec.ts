@@ -3,11 +3,23 @@ import { CreateProductDto } from '../../modules/products/dto/create-product.dto'
 import { UpdateProductDto } from '../../modules/products/dto/update-product.dto';
 import { CreateOrderDto } from '../../modules/orders/dto/create-order.dto';
 import { QueryNotificationDto } from '../../modules/notifications/dto/query-notification.dto';
+import { QueryProductDto } from '../../modules/products/dto/query-product.dto';
 
 const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
 const product = { sku: 'TEST', name: 'Product', price: 1, stock: 1 };
 
 describe('Request validation', () => {
+  it.each([
+    { minPrice: '-2' }, { maxPrice: '-2' }, { minPrice: 'abc' }, { maxPrice: 'Infinity' },
+  ])('rejects invalid product price filter %j', async query => {
+    await expect(pipe.transform(query, { type: 'query', metatype: QueryProductDto }))
+      .rejects.toThrow(BadRequestException);
+  });
+  it.each([{}, { minPrice: '0' }, { maxPrice: '0' }, { minPrice: '1.25', maxPrice: '2.5' }])
+    ('allows optional, zero and decimal price filters %j', async query => {
+      await expect(pipe.transform(query, { type: 'query', metatype: QueryProductDto }))
+        .resolves.toBeInstanceOf(QueryProductDto);
+    });
   it.each([
     { name: 'x'.repeat(256) }, { sku: 'x'.repeat(101) }, { name: '   ' },
     { stock: 2147483648 }, { stock: true }, { price: 1.005 }, { price: 10000000000 },

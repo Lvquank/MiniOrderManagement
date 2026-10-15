@@ -69,17 +69,31 @@
           </button>
         </div>
 
-        <div class="filter-card">
+        <form id="product-filter-form" class="filter-card" novalidate>
           <div class="filter-inputs">
-            <input type="text" id="search-product" placeholder="🔍 Tìm kiếm theo tên sản phẩm..." class="form-input">
-            <input type="number" id="filter-min-price" placeholder="Giá tối thiểu (VND)" class="form-input">
-            <input type="number" id="filter-max-price" placeholder="Giá tối đa (VND)" class="form-input">
-            <button id="btn-filter-products" class="btn btn-secondary">Lọc Dữ Liệu</button>
-            <button id="btn-reset-filter-products" class="btn btn-outline">Đặt lại</button>
+            <div class="filter-field filter-search form-group">
+              <label for="search-product">Tên sản phẩm</label>
+              <input type="search" id="search-product" placeholder="Nhập tên sản phẩm..." class="form-input">
+            </div>
+            <div class="filter-field form-group">
+              <label for="filter-min-price">Giá tối thiểu (VND)</label>
+              <input type="number" id="filter-min-price" min="0" step="any" placeholder="Không giới hạn" class="form-input" aria-describedby="filter-min-price-error">
+              <p id="filter-min-price-error" class="field-error" hidden></p>
+            </div>
+            <div class="filter-field form-group">
+              <label for="filter-max-price">Giá tối đa (VND)</label>
+              <input type="number" id="filter-max-price" min="0" step="any" placeholder="Không giới hạn" class="form-input" aria-describedby="filter-max-price-error">
+              <p id="filter-max-price-error" class="field-error" hidden></p>
+            </div>
+            <div class="filter-actions">
+              <button type="submit" id="btn-filter-products" class="btn btn-secondary">Lọc sản phẩm</button>
+              <button type="button" id="btn-reset-filter-products" class="btn btn-outline">Đặt lại</button>
+            </div>
           </div>
-        </div>
+          <p id="product-filter-status" class="filter-status" role="status" aria-live="polite" aria-atomic="true">Bỏ trống mức giá nếu không cần giới hạn.</p>
+        </form>
 
-        <div class="table-card">
+        <div id="products-results" class="table-card" aria-busy="false">
           <table class="data-table">
             <thead>
               <tr>

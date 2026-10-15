@@ -9,14 +9,14 @@ export class QueryProductDto extends PaginationDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Minimum price filter' })
+  @ApiPropertyOptional({ description: 'Minimum price filter (inclusive)', minimum: 0 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({ description: 'Maximum price filter' })
+  @ApiPropertyOptional({ description: 'Maximum price filter (inclusive, must be >= minimum price)', minimum: 0 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

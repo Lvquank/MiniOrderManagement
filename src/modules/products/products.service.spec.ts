@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { Product } from './entities/product.entity';
+import { QueryProductDto } from './dto/query-product.dto';
 
 describe('ProductsService', () => {
   let service: ProductsService;
@@ -83,6 +84,25 @@ describe('ProductsService', () => {
     );
     expect(repository.save).not.toHaveBeenCalled();
     expect(result.stock).toBe(0);
+  });
+
+  it('rejects reversed price ranges before querying the database', async () => {
+    const query = Object.assign(new QueryProductDto(), { minPrice: 100, maxPrice: 50 });
+    await expect(service.findAll(query)).rejects.toThrow(BadRequestException);
+    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('keeps both inclusive price bounds when they are zero', async () => {
+    const builder = {
+      where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(), getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    repository.createQueryBuilder.mockReturnValue(builder);
+    const query = Object.assign(new QueryProductDto(), { minPrice: 0, maxPrice: 0 });
+    await expect(service.findAll(query)).resolves.toMatchObject({ data: [], total: 0 });
+    expect(builder.andWhere).toHaveBeenCalledWith('product.price >= :minPrice', { minPrice: 0 });
+    expect(builder.andWhere).toHaveBeenCalledWith('product.price <= :maxPrice', { maxPrice: 0 });
   });
 
   it('returns 404 when updating a deleted or missing product', async () => {
